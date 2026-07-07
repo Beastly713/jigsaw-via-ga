@@ -16,6 +16,8 @@ from streamlit_app.solver_workflow import (
     MIN_PIECE_SIZE,
     bgr_to_rgb,
     crop_to_piece_grid,
+    fitness_history_chart_data,
+    fitness_history_to_csv_bytes,
     format_fitness,
     image_to_png_bytes,
     pil_to_bgr,
@@ -256,9 +258,28 @@ if "solver_result" in st.session_state:
     st.write(f"Fitness history rows: {len(data['fitness_history'])}")
     st.write(f"Snapshots captured: {len(data['snapshots'])}")
 
+    st.subheader("Fitness History")
+
+    history = data["fitness_history"]
+
+    if history:
+        st.line_chart(
+            fitness_history_chart_data(history),
+            x="generation",
+            y=["best_fitness", "average_fitness", "worst_fitness"],
+        )
+
+        st.dataframe(
+            history,
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("No fitness history was recorded for this run.")
+
     st.subheader("Downloads")
 
-    download_col1, download_col2, download_col3 = st.columns(3)
+    download_col1, download_col2, download_col3, download_col4 = st.columns(4)
 
     with download_col1:
         st.download_button(
@@ -282,6 +303,15 @@ if "solver_result" in st.session_state:
             data=json.dumps(data["manifest"], indent=2).encode("utf-8"),
             file_name="puzzle_manifest.json",
             mime="application/json",
+        )
+
+    with download_col4:
+        st.download_button(
+            "Download history CSV",
+            data=fitness_history_to_csv_bytes(data["fitness_history"]),
+            file_name="fitness_history.csv",
+            mime="text/csv",
+            disabled=not data["fitness_history"],
         )
 
     with st.expander("Run log"):

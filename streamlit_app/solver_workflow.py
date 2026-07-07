@@ -1,3 +1,4 @@
+import csv
 import random
 import time
 from contextlib import redirect_stdout
@@ -21,6 +22,12 @@ from gaps.image_analysis import ImageAnalysis
 
 HIGH_PIECE_COUNT_WARNING = 150
 HEAVY_CONFIGURATION_WARNING_SCORE = 5_000_000
+FITNESS_HISTORY_FIELDS = [
+    "generation",
+    "best_fitness",
+    "average_fitness",
+    "worst_fitness",
+]
 
 
 def estimate_run_score(total_pieces: int, generations: int, population: int) -> int:
@@ -138,6 +145,33 @@ def format_fitness(value) -> str:
     if value is None:
         return "n/a"
     return f"{value:.6f}"
+
+
+def fitness_history_to_csv_bytes(history: list[dict]) -> bytes:
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=FITNESS_HISTORY_FIELDS)
+    writer.writeheader()
+
+    for row in history:
+        writer.writerow(
+            {
+                "generation": row["generation"],
+                "best_fitness": row["best_fitness"],
+                "average_fitness": row["average_fitness"],
+                "worst_fitness": row["worst_fitness"],
+            }
+        )
+
+    return buffer.getvalue().encode("utf-8")
+
+
+def fitness_history_chart_data(history: list[dict]) -> dict:
+    return {
+        "generation": [row["generation"] for row in history],
+        "best_fitness": [row["best_fitness"] for row in history],
+        "average_fitness": [row["average_fitness"] for row in history],
+        "worst_fitness": [row["worst_fitness"] for row in history],
+    }
 
 
 def run_solver_workflow(

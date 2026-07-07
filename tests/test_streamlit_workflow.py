@@ -7,6 +7,7 @@ from PIL import Image
 from streamlit_app.solver_workflow import (
     DEFAULT_GENERATIONS,
     DEFAULT_POPULATION,
+    FITNESS_HISTORY_FIELDS,
     HIGH_PIECE_COUNT_WARNING,
     MAX_PIECE_SIZE,
     MIN_PIECE_SIZE,
@@ -16,6 +17,8 @@ from streamlit_app.solver_workflow import (
     create_puzzle_and_manifest,
     crop_to_piece_grid,
     estimate_run_score,
+    fitness_history_chart_data,
+    fitness_history_to_csv_bytes,
     format_fitness,
     image_to_png_bytes,
     make_snapshot_callback,
@@ -171,6 +174,56 @@ def test_snapshot_callback_collects_at_interval():
     assert snapshots[2]["fitness"] == 1.25
 
 
+def test_fitness_history_to_csv_bytes_includes_expected_columns():
+    history = [
+        {
+            "generation": 1,
+            "best_fitness": 10.0,
+            "average_fitness": 5.0,
+            "worst_fitness": 1.0,
+        },
+        {
+            "generation": 2,
+            "best_fitness": 12.0,
+            "average_fitness": 7.5,
+            "worst_fitness": 2.0,
+        },
+    ]
+
+    csv_bytes = fitness_history_to_csv_bytes(history)
+    csv_text = csv_bytes.decode("utf-8")
+
+    assert csv_text.splitlines()[0] == ",".join(FITNESS_HISTORY_FIELDS)
+    assert "1,10.0,5.0,1.0" in csv_text
+    assert "2,12.0,7.5,2.0" in csv_text
+
+
+def test_fitness_history_chart_data_returns_column_oriented_data():
+    history = [
+        {
+            "generation": 1,
+            "best_fitness": 10.0,
+            "average_fitness": 5.0,
+            "worst_fitness": 1.0,
+        },
+        {
+            "generation": 2,
+            "best_fitness": 12.0,
+            "average_fitness": 7.5,
+            "worst_fitness": 2.0,
+        },
+    ]
+
+    chart_data = fitness_history_chart_data(history)
+
+    assert chart_data == {
+        "generation": [1, 2],
+        "best_fitness": [10.0, 12.0],
+        "average_fitness": [5.0, 7.5],
+        "worst_fitness": [1.0, 2.0],
+    }
+
+
 def test_run_solver_workflow_rejects_invalid_snapshot_interval():
     image = _sample_bgr_image(width=64, height=64)
 
@@ -249,3 +302,7 @@ def test_run_solver_workflow_returns_result_dictionary():
     }
     assert result["snapshots"][0]["generation"] == 1
     assert result["snapshots"][0]["image"].shape == (64, 64, 3)
+    csv_bytes = fitness_history_to_csv_bytes(result["fitness_history"])
+    assert csv_bytes.startswith(
+        b"generation,best_fitness,average_fitness,worst_fitness"
+    )
