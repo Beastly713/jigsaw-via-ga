@@ -38,18 +38,20 @@ st.set_page_config(
 st.title("🧩 Genetic Algorithm Jigsaw Puzzle Solver")
 
 st.write(
-    "Upload an image, turn it into a square-piece jigsaw puzzle, "
-    "solve it with a Genetic Algorithm, and evaluate the result with "
-    "manifest-based direct and neighbor comparison metrics."
+    "Local visualization dashboard for generating a shuffled jigsaw puzzle, "
+    "solving it with a Genetic Algorithm, and inspecting solution quality, "
+    "fitness evolution, and generation snapshots."
 )
 
-st.sidebar.header("Solver Settings")
+st.sidebar.header("Local Solver Controls")
 
+st.sidebar.subheader("Image Input")
 uploaded_file = st.sidebar.file_uploader(
     "Upload image",
     type=["jpg", "jpeg", "png"],
 )
 
+st.sidebar.subheader("Puzzle Settings")
 piece_size = st.sidebar.number_input(
     "Piece size",
     min_value=MIN_PIECE_SIZE,
@@ -62,6 +64,7 @@ piece_size = st.sidebar.number_input(
     ),
 )
 
+st.sidebar.subheader("GA Settings")
 generations = st.sidebar.number_input(
     "Generations",
     min_value=1,
@@ -104,6 +107,7 @@ seed = st.sidebar.number_input(
     help="Integer seed for reproducible shuffling and GA randomness.",
 )
 
+st.sidebar.subheader("Snapshot Settings")
 snapshot_interval = st.sidebar.number_input(
     "Snapshot interval",
     min_value=1,
@@ -119,6 +123,8 @@ st.sidebar.caption(
     "Large images, small piece sizes, high generations, and high population "
     "sizes can take longer locally. The app no longer blocks heavy local runs."
 )
+
+st.sidebar.subheader("Run")
 
 piece_size = int(piece_size)
 generations = int(generations)
@@ -147,11 +153,13 @@ columns = cropped_width // piece_size
 total_pieces = rows * columns
 
 st.subheader("Input Preview")
-st.write(
-    f"Original size: {original_width}×{original_height} px | "
-    f"Cropped size: {cropped_width}×{cropped_height} px | "
-    f"Grid: {rows}×{columns} | Pieces: {total_pieces}"
-)
+
+preview_col1, preview_col2, preview_col3, preview_col4 = st.columns(4)
+
+preview_col1.metric("Original size", f"{original_width}×{original_height}")
+preview_col2.metric("Cropped size", f"{cropped_width}×{cropped_height}")
+preview_col3.metric("Grid", f"{rows}×{columns}")
+preview_col4.metric("Pieces", f"{total_pieces}")
 
 st.image(
     bgr_to_rgb(preview_cropped_image),
@@ -193,162 +201,248 @@ if "solver_result" in st.session_state:
     data = st.session_state["solver_result"]
     metrics = data["metrics"]
 
-    st.subheader("Results")
+    st.subheader("Run Summary")
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.image(
-            bgr_to_rgb(data["cropped_image"]),
-            caption="Cropped Original",
-            use_container_width=True,
-        )
-
-    with col2:
-        st.image(
-            bgr_to_rgb(data["puzzle_image"]),
-            caption="Shuffled Puzzle",
-            use_container_width=True,
-        )
-
-    with col3:
-        st.image(
-            bgr_to_rgb(data["solution_image"]),
-            caption="GA Solution",
-            use_container_width=True,
-        )
-
-    st.image(
-        bgr_to_rgb(data["comparison_image"]),
-        caption="Original | Puzzle | Solution",
-        use_container_width=True,
+    summary_col1, summary_col2, summary_col3, summary_col4, summary_col5 = st.columns(
+        5
     )
 
-    metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
-
-    metric_col1.metric(
-        "Piece-position accuracy",
+    summary_col1.metric(
+        "Piece accuracy",
         f"{metrics['piece_position_accuracy'] * 100:.2f}%",
     )
 
-    metric_col2.metric(
+    summary_col2.metric(
         "Adjacency accuracy",
         f"{metrics['adjacency_accuracy'] * 100:.2f}%",
     )
 
-    metric_col3.metric(
+    summary_col3.metric(
         "Best fitness",
         format_fitness(data["best_fitness"]),
     )
 
-    metric_col4.metric(
+    summary_col4.metric(
         "Runtime",
         f"{data['runtime']:.2f}s",
     )
 
-    st.write(
-        f"Correct positions: {metrics['correct_positions']}/"
-        f"{metrics['total_pieces']}"
+    summary_col5.metric(
+        "Generations",
+        f"{data['generations_completed']}/{data['generations']}",
     )
-    st.write(
-        f"Correct adjacencies: {metrics['correct_adjacencies']}/"
-        f"{metrics['total_adjacencies']}"
+
+    (
+        overview_tab,
+        images_tab,
+        metrics_tab,
+        history_tab,
+        snapshots_tab,
+        downloads_tab,
+    ) = st.tabs(
+        [
+            "Overview",
+            "Images",
+            "Metrics",
+            "Fitness History",
+            "Snapshots",
+            "Downloads & Log",
+        ]
     )
-    st.write(f"Generations completed: {data['generations_completed']}")
-    st.write(f"Termination reason: {data['termination_reason']}")
-    st.write(f"Metric method: {metrics['metric_method']}")
-    st.write(f"Fitness history rows: {len(data['fitness_history'])}")
-    st.write(f"Snapshots captured: {len(data['snapshots'])}")
 
-    st.subheader("Fitness History")
+    with overview_tab:
+        st.subheader("Configuration")
 
-    history = data["fitness_history"]
+        config_col1, config_col2 = st.columns(2)
 
-    if history:
-        st.line_chart(
-            fitness_history_chart_data(history),
-            x="generation",
-            y=["best_fitness", "average_fitness", "worst_fitness"],
-        )
+        with config_col1:
+            st.write(f"Piece size: {data['piece_size']}")
+            st.write(f"Population: {data['population']}")
+            st.write(f"Generations requested: {data['generations']}")
+            st.write(f"Generations completed: {data['generations_completed']}")
 
-        st.dataframe(
-            history,
+        with config_col2:
+            st.write(f"Mutation rate: {data['mutation_rate']}")
+            st.write(f"Seed: {data['seed']}")
+            st.write(f"Snapshot interval: {data['snapshot_interval']}")
+            st.write(f"Termination reason: {data['termination_reason']}")
+
+        st.subheader("Artifacts Captured")
+        artifact_col1, artifact_col2, artifact_col3 = st.columns(3)
+        artifact_col1.metric("Fitness rows", len(data["fitness_history"]))
+        artifact_col2.metric("Snapshots", len(data["snapshots"]))
+        artifact_col3.metric("Metric method", metrics["metric_method"])
+
+    with images_tab:
+        st.subheader("Puzzle Images")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.image(
+                bgr_to_rgb(data["cropped_image"]),
+                caption="Cropped Original",
+                use_container_width=True,
+            )
+
+        with col2:
+            st.image(
+                bgr_to_rgb(data["puzzle_image"]),
+                caption="Shuffled Puzzle",
+                use_container_width=True,
+            )
+
+        with col3:
+            st.image(
+                bgr_to_rgb(data["solution_image"]),
+                caption="GA Solution",
+                use_container_width=True,
+            )
+
+        st.image(
+            bgr_to_rgb(data["comparison_image"]),
+            caption="Original | Puzzle | Solution",
             use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info("No fitness history was recorded for this run.")
-
-    st.subheader("Generation Snapshots")
-
-    snapshots = data["snapshots"]
-
-    if snapshots:
-        st.caption(
-            f"Showing {len(snapshots)} in-memory snapshots captured every "
-            f"{data['snapshot_interval']} completed generation(s)."
         )
 
-        snapshots_per_row = 3
-        for start in range(0, len(snapshots), snapshots_per_row):
-            row_snapshots = snapshots[start : start + snapshots_per_row]
-            columns = st.columns(snapshots_per_row)
+    with metrics_tab:
+        st.subheader("Solution Quality Metrics")
 
-            for column, snapshot in zip(columns, row_snapshots):
-                with column:
-                    st.image(
-                        bgr_to_rgb(snapshot["image"]),
-                        caption=snapshot_caption(snapshot),
-                        use_container_width=True,
-                    )
-                    st.download_button(
-                        "Download snapshot",
-                        data=image_to_png_bytes(snapshot["image"]),
-                        file_name=snapshot_filename(snapshot),
-                        mime="image/png",
-                        key=f"snapshot_download_{start}_{snapshot['generation']}",
-                    )
-    else:
-        st.info(
-            "No snapshots were captured. Try a smaller snapshot interval or more generations."
+        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+
+        metric_col1.metric(
+            "Piece-position accuracy",
+            f"{metrics['piece_position_accuracy'] * 100:.2f}%",
         )
 
-    st.subheader("Downloads")
-
-    download_col1, download_col2, download_col3, download_col4 = st.columns(4)
-
-    with download_col1:
-        st.download_button(
-            "Download solution PNG",
-            data=image_to_png_bytes(data["solution_image"]),
-            file_name="ga_solution.png",
-            mime="image/png",
+        metric_col2.metric(
+            "Adjacency accuracy",
+            f"{metrics['adjacency_accuracy'] * 100:.2f}%",
         )
 
-    with download_col2:
-        st.download_button(
-            "Download comparison PNG",
-            data=image_to_png_bytes(data["comparison_image"]),
-            file_name="ga_comparison.png",
-            mime="image/png",
+        metric_col3.metric(
+            "Best fitness",
+            format_fitness(data["best_fitness"]),
         )
 
-    with download_col3:
-        st.download_button(
-            "Download manifest JSON",
-            data=json.dumps(data["manifest"], indent=2).encode("utf-8"),
-            file_name="puzzle_manifest.json",
-            mime="application/json",
+        metric_col4.metric(
+            "Runtime",
+            f"{data['runtime']:.2f}s",
         )
 
-    with download_col4:
-        st.download_button(
-            "Download history CSV",
-            data=fitness_history_to_csv_bytes(data["fitness_history"]),
-            file_name="fitness_history.csv",
-            mime="text/csv",
-            disabled=not data["fitness_history"],
-        )
+        detail_col1, detail_col2 = st.columns(2)
 
-    with st.expander("Run log"):
-        st.text(data["stdout"] or "No log captured.")
+        with detail_col1:
+            st.write(
+                f"Correct positions: {metrics['correct_positions']}/"
+                f"{metrics['total_pieces']}"
+            )
+            st.write(
+                f"Correct adjacencies: {metrics['correct_adjacencies']}/"
+                f"{metrics['total_adjacencies']}"
+            )
+
+        with detail_col2:
+            st.write(f"Generations completed: {data['generations_completed']}")
+            st.write(f"Termination reason: {data['termination_reason']}")
+            st.write(f"Metric method: {metrics['metric_method']}")
+            st.write(f"Fitness history rows: {len(data['fitness_history'])}")
+            st.write(f"Snapshots captured: {len(data['snapshots'])}")
+
+    with history_tab:
+        st.subheader("Fitness History")
+
+        history = data["fitness_history"]
+
+        if history:
+            st.line_chart(
+                fitness_history_chart_data(history),
+                x="generation",
+                y=["best_fitness", "average_fitness", "worst_fitness"],
+            )
+
+            st.dataframe(
+                history,
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("No fitness history was recorded for this run.")
+
+    with snapshots_tab:
+        st.subheader("Generation Snapshots")
+
+        snapshots = data["snapshots"]
+
+        if snapshots:
+            st.caption(
+                f"Showing {len(snapshots)} in-memory snapshots captured every "
+                f"{data['snapshot_interval']} completed generation(s)."
+            )
+
+            snapshots_per_row = 3
+            for start in range(0, len(snapshots), snapshots_per_row):
+                row_snapshots = snapshots[start : start + snapshots_per_row]
+                columns = st.columns(snapshots_per_row)
+
+                for column, snapshot in zip(columns, row_snapshots):
+                    with column:
+                        st.image(
+                            bgr_to_rgb(snapshot["image"]),
+                            caption=snapshot_caption(snapshot),
+                            use_container_width=True,
+                        )
+                        st.download_button(
+                            "Download snapshot",
+                            data=image_to_png_bytes(snapshot["image"]),
+                            file_name=snapshot_filename(snapshot),
+                            mime="image/png",
+                            key=f"snapshot_download_{start}_{snapshot['generation']}",
+                        )
+        else:
+            st.info(
+                "No snapshots were captured. Try a smaller snapshot interval or more generations."
+            )
+
+    with downloads_tab:
+        st.subheader("Downloads")
+
+        download_col1, download_col2, download_col3, download_col4 = st.columns(4)
+
+        with download_col1:
+            st.download_button(
+                "Download solution PNG",
+                data=image_to_png_bytes(data["solution_image"]),
+                file_name="ga_solution.png",
+                mime="image/png",
+            )
+
+        with download_col2:
+            st.download_button(
+                "Download comparison PNG",
+                data=image_to_png_bytes(data["comparison_image"]),
+                file_name="ga_comparison.png",
+                mime="image/png",
+            )
+
+        with download_col3:
+            st.download_button(
+                "Download manifest JSON",
+                data=json.dumps(data["manifest"], indent=2).encode("utf-8"),
+                file_name="puzzle_manifest.json",
+                mime="application/json",
+            )
+
+        with download_col4:
+            st.download_button(
+                "Download history CSV",
+                data=fitness_history_to_csv_bytes(data["fitness_history"]),
+                file_name="fitness_history.csv",
+                mime="text/csv",
+                disabled=not data["fitness_history"],
+            )
+
+        st.subheader("Run Log")
+
+        with st.expander("Show captured GA stdout log"):
+            st.text(data["stdout"] or "No log captured.")
