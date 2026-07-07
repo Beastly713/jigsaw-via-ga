@@ -11,7 +11,6 @@ if str(ROOT_DIR) not in sys.path:
 from streamlit_app.solver_workflow import (
     DEFAULT_GENERATIONS,
     DEFAULT_POPULATION,
-    HIGH_PIECE_COUNT_WARNING,
     MAX_PIECE_SIZE,
     MIN_PIECE_SIZE,
     bgr_to_rgb,
@@ -121,7 +120,7 @@ snapshot_interval = st.sidebar.number_input(
 
 st.sidebar.caption(
     "Large images, small piece sizes, high generations, and high population "
-    "sizes can take longer locally. The app no longer blocks heavy local runs."
+    "sizes can take longer to solve locally."
 )
 
 st.sidebar.subheader("Run")
@@ -170,8 +169,7 @@ st.image(
 if should_warn_piece_count(total_pieces):
     st.warning(
         f"This setup creates {total_pieces} pieces. "
-        f"That is above the old cloud-safe warning threshold of "
-        f"{HIGH_PIECE_COUNT_WARNING}, so the run may take longer locally."
+        "Large piece counts can increase preprocessing and solving time."
     )
 
 if should_warn_heavy_configuration(total_pieces, generations, population):
@@ -180,7 +178,7 @@ if should_warn_heavy_configuration(total_pieces, generations, population):
         "This is a heavy local configuration: "
         f"{total_pieces} pieces × {generations} generations × "
         f"{population} population = {run_score:,} estimated work score. "
-        "It will still run, but it may take noticeably longer."
+        "Expect a longer runtime."
     )
 
 if run_button:
