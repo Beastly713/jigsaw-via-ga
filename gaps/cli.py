@@ -1,4 +1,5 @@
 import csv
+import json
 import random
 import time
 from pathlib import Path
@@ -75,6 +76,118 @@ def _write_image(path: str | Path, image: np.ndarray) -> None:
         raise click.ClickException(f"Could not write image file: {output_path}")
 
 
+def _default_manifest_path(puzzle_path: str | Path) -> Path:
+    path = Path(puzzle_path)
+    return path.with_suffix(".manifest.json")
+
+
+def _write_manifest(path: str | Path, manifest: dict) -> None:
+    output_path = Path(path)
+    if output_path.parent != Path("."):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with output_path.open("w", encoding="utf-8") as manifest_file:
+        json.dump(manifest, manifest_file, indent=2)
+
+
+def _read_manifest(path: str | Path) -> dict:
+    manifest_path = Path(path)
+    try:
+        with manifest_path.open("r", encoding="utf-8") as manifest_file:
+            manifest = json.load(manifest_file)
+    except OSError as exc:
+        raise click.ClickException(
+            f"Could not read puzzle manifest: {manifest_path}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise click.ClickException(
+            f"Invalid puzzle manifest JSON: {manifest_path}"
+        ) from exc
+
+    if not isinstance(manifest, dict):
+        raise click.ClickException(f"Invalid puzzle manifest format: {manifest_path}")
+
+    return manifest
+
+
+def _validate_manifest(
+    manifest: dict, piece_size: int, rows: int, columns: int
+) -> dict:
+    required_fields = {
+        "version",
+        "piece_size",
+        "rows",
+        "columns",
+        "puzzle_to_original",
+    }
+    missing_fields = sorted(required_fields - set(manifest))
+    if missing_fields:
+        raise click.ClickException(
+            "Puzzle manifest is missing required fields: "
+            + ", ".join(missing_fields)
+        )
+
+    if manifest["piece_size"] != piece_size:
+        raise click.ClickException(
+            "Puzzle manifest piece size does not match requested piece size"
+        )
+
+    if manifest["rows"] != rows or manifest["columns"] != columns:
+        raise click.ClickException(
+            "Puzzle manifest grid does not match puzzle image dimensions"
+        )
+
+    mapping = manifest["puzzle_to_original"]
+    if not isinstance(mapping, list):
+        raise click.ClickException("Puzzle manifest mapping must be a list")
+
+    total_pieces = rows * columns
+    if len(mapping) != total_pieces:
+        raise click.ClickException(
+            "Puzzle manifest mapping length does not match puzzle grid"
+        )
+
+    try:
+        normalized_mapping = [int(value) for value in mapping]
+    except (TypeError, ValueError) as exc:
+        raise click.ClickException(
+            "Puzzle manifest mapping must contain integer piece ids"
+        ) from exc
+
+    if sorted(normalized_mapping) != list(range(total_pieces)):
+        raise click.ClickException(
+            "Puzzle manifest mapping must be a permutation of puzzle piece ids"
+        )
+
+    manifest = manifest.copy()
+    manifest["puzzle_to_original"] = normalized_mapping
+    return manifest
+
+
+def _crop_image_to_piece_grid(
+    image: np.ndarray, piece_size: int
+) -> tuple[np.ndarray, bool]:
+    height, width = image.shape[:2]
+
+    cropped_width = (width // piece_size) * piece_size
+    cropped_height = (height // piece_size) * piece_size
+
+    if cropped_width == 0 or cropped_height == 0:
+        raise click.ClickException(
+            f"Piece size {piece_size} is too large for image dimensions "
+            f"{width}x{height}"
+        )
+
+    if cropped_width == width and cropped_height == height:
+        return image, False
+
+    left = (width - cropped_width) // 2
+    top = (height - cropped_height) // 2
+
+    cropped_image = image[top : top + cropped_height, left : left + cropped_width]
+    return cropped_image.copy(), True
+
+
 def _validate_image_dimensions(image: np.ndarray, piece_size: int) -> None:
     height, width = image.shape[:2]
     if height % piece_size != 0 or width % piece_size != 0:
@@ -126,47 +239,55 @@ def _write_fitness_plot(path: str, history) -> None:
     plt.close()
 
 
-def _compute_solution_metrics(original_image, solved_image, piece_size):
-    original_pieces, rows, columns = utils.flatten_image(original_image, piece_size)
-    solved_pieces, _, _ = utils.flatten_image(solved_image, piece_size)
+def _compute_solution_metrics_from_manifest(individual, manifest: dict) -> dict:
+    rows = manifest["rows"]
+    columns = manifest["columns"]
+    puzzle_to_original = manifest["puzzle_to_original"]
+
+    total_pieces = rows * columns
+    if len(individual.pieces) != total_pieces:
+        raise click.ClickException(
+            "Solved individual size does not match puzzle manifest"
+        )
+
+    solved_original_ids = [puzzle_to_original[piece.id] for piece in individual.pieces]
 
     correct_positions = sum(
-        np.array_equal(original_piece, solved_piece)
-        for original_piece, solved_piece in zip(original_pieces, solved_pieces)
+        original_id == position
+        for position, original_id in enumerate(solved_original_ids)
     )
-    total_pieces = len(original_pieces)
-
-    original_piece_indexes = {
-        piece.tobytes(): index for index, piece in enumerate(original_pieces)
-    }
-    solved_piece_indexes = [
-        original_piece_indexes.get(piece.tobytes()) for piece in solved_pieces
-    ]
 
     correct_adjacencies = 0
     total_adjacencies = rows * (columns - 1) + (rows - 1) * columns
 
     for row in range(rows):
         for column in range(columns - 1):
-            left = solved_piece_indexes[row * columns + column]
-            right = solved_piece_indexes[row * columns + column + 1]
-            if left is not None and right is not None and right == left + 1:
+            left = solved_original_ids[row * columns + column]
+            right = solved_original_ids[row * columns + column + 1]
+
+            if left % columns != columns - 1 and right == left + 1:
                 correct_adjacencies += 1
 
     for row in range(rows - 1):
         for column in range(columns):
-            top = solved_piece_indexes[row * columns + column]
-            bottom = solved_piece_indexes[(row + 1) * columns + column]
-            if top is not None and bottom is not None and bottom == top + columns:
+            top = solved_original_ids[row * columns + column]
+            bottom = solved_original_ids[(row + 1) * columns + column]
+
+            if top < total_pieces - columns and bottom == top + columns:
                 correct_adjacencies += 1
 
     return {
+        "metric_method": "manifest",
         "piece_position_accuracy": correct_positions / total_pieces,
         "adjacency_accuracy": (
             correct_adjacencies / total_adjacencies
             if total_adjacencies > 0
             else 0.0
         ),
+        "correct_positions": correct_positions,
+        "total_pieces": total_pieces,
+        "correct_adjacencies": correct_adjacencies,
+        "total_adjacencies": total_adjacencies,
     }
 
 
@@ -261,6 +382,14 @@ def _make_snapshot_callback(snapshots_dir, snapshot_interval):
     help="Original image used to compute solution-quality metrics.",
 )
 @click.option(
+    "--manifest",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+    help=(
+        "Puzzle manifest JSON created by gaps create. Defaults to "
+        "puzzle.manifest.json next to the puzzle if present."
+    ),
+)
+@click.option(
     "--comparison",
     type=click.Path(dir_okay=False, writable=True),
     help="Write side-by-side comparison image to a file.",
@@ -290,6 +419,7 @@ def run(
     history: str,
     fitness_plot: str,
     original: str,
+    manifest: str,
     comparison: str,
     snapshots_dir: str,
     snapshot_interval: int,
@@ -316,17 +446,55 @@ def run(
         size = detector.detect()
 
     _validate_image_dimensions(input_puzzle, size)
+
+    height, width = input_puzzle.shape[:2]
+    puzzle_rows = height // size
+    puzzle_columns = width // size
+    pieces = puzzle_rows * puzzle_columns
+
+    manifest_path = None
+    manifest_data = None
+
+    if manifest is not None:
+        manifest_path = Path(manifest)
+    else:
+        default_manifest_path = _default_manifest_path(puzzle)
+        if default_manifest_path.exists():
+            manifest_path = default_manifest_path
+
+    if manifest_path is not None:
+        manifest_data = _validate_manifest(
+            _read_manifest(manifest_path),
+            size,
+            puzzle_rows,
+            puzzle_columns,
+        )
+
     original_image = None
     if original is not None:
         original_image = _read_image(original)
+
+        if original_image.shape != input_puzzle.shape:
+            original_height, original_width = original_image.shape[:2]
+            original_image, was_cropped = _crop_image_to_piece_grid(
+                original_image, size
+            )
+
+            if was_cropped:
+                cropped_height, cropped_width = original_image.shape[:2]
+                click.echo(
+                    "Cropped original image from "
+                    f"{original_width}x{original_height} to "
+                    f"{cropped_width}x{cropped_height} "
+                    f"to match puzzle grid"
+                )
+
         _validate_image_dimensions(original_image, size)
+
         if original_image.shape != input_puzzle.shape:
             raise click.ClickException(
                 "Original image shape does not match puzzle image shape"
             )
-
-    height, width = input_puzzle.shape[:2]
-    pieces = (height // size) * (width // size)
 
     click.echo(f"Population: {population}")
     click.echo(f"Generations: {generations}")
@@ -351,8 +519,8 @@ def run(
     runtime = time.perf_counter() - start_time
     output_image = result.to_image()
     metrics = None
-    if original_image is not None:
-        metrics = _compute_solution_metrics(original_image, output_image, size)
+    if manifest_data is not None:
+        metrics = _compute_solution_metrics_from_manifest(result, manifest_data)
     comparison_images = []
     if original_image is not None:
         comparison_images.append(original_image)
@@ -390,13 +558,26 @@ def run(
     if snapshots_dir is not None:
         click.echo(f"  Snapshots: {snapshots_dir}")
     if metrics is not None:
+        click.echo(f"  Metric method: {metrics['metric_method']}")
         click.echo(
             "  Piece-position accuracy: "
             f"{metrics['piece_position_accuracy'] * 100:.2f}%"
         )
         click.echo(
+            "  Correct positions: "
+            f"{metrics['correct_positions']}/{metrics['total_pieces']}"
+        )
+        click.echo(
             f"  Adjacency accuracy: {metrics['adjacency_accuracy'] * 100:.2f}%"
         )
+        click.echo(
+            "  Correct adjacencies: "
+            f"{metrics['correct_adjacencies']}/{metrics['total_adjacencies']}"
+        )
+        if manifest_path is not None:
+            click.echo(f"  Manifest: {manifest_path}")
+    else:
+        click.echo("  Solution-quality metrics: unavailable (no puzzle manifest found)")
 
 
 @click.command()
@@ -416,7 +597,15 @@ def run(
     type=int,
     help="Seed for deterministic puzzle creation.",
 )
-def create(image: str, puzzle: str, size: int, seed: int) -> None:
+@click.option(
+    "--manifest",
+    type=click.Path(dir_okay=False, writable=True),
+    help=(
+        "Write puzzle manifest JSON. Defaults to puzzle.manifest.json next "
+        "to the puzzle."
+    ),
+)
+def create(image: str, puzzle: str, size: int, seed: int, manifest: str) -> None:
     """Create jigsaw puzzle with square pieces.
 
     \b
@@ -433,20 +622,54 @@ def create(image: str, puzzle: str, size: int, seed: int) -> None:
         _set_seed(seed)
 
     input_image = _read_image(image)
+    original_height, original_width = input_image.shape[:2]
+
+    input_image, was_cropped = _crop_image_to_piece_grid(input_image, size)
+
+    if was_cropped:
+        cropped_height, cropped_width = input_image.shape[:2]
+        click.echo(
+            "Cropped image from "
+            f"{original_width}x{original_height} to "
+            f"{cropped_width}x{cropped_height} "
+            f"to fit piece size {size}"
+        )
+
     _validate_image_dimensions(input_image, size)
     pieces, rows, columns = utils.flatten_image(input_image, size)
 
-    # Randomize pieces in order to make puzzle
-    np.random.shuffle(pieces)
+    puzzle_to_original = np.arange(len(pieces))
+    np.random.shuffle(puzzle_to_original)
+    puzzle_to_original = puzzle_to_original.tolist()
 
-    # Create puzzle by stacking pieces
-    output_image = utils.assemble_image(pieces, rows, columns)
+    shuffled_pieces = [pieces[index] for index in puzzle_to_original]
+    output_image = utils.assemble_image(shuffled_pieces, rows, columns)
 
     _write_image(puzzle, output_image)
+    manifest_path = (
+        Path(manifest) if manifest is not None else _default_manifest_path(puzzle)
+    )
+    source_height, source_width = input_image.shape[:2]
+
+    _write_manifest(
+        manifest_path,
+        {
+            "version": 1,
+            "source_image": image,
+            "puzzle_image": puzzle,
+            "piece_size": size,
+            "rows": rows,
+            "columns": columns,
+            "cropped_width": source_width,
+            "cropped_height": source_height,
+            "puzzle_to_original": puzzle_to_original,
+        },
+    )
 
     if seed is not None:
         click.echo(f"Seed: {seed}")
     click.echo(f"\nCreated puzzle with {len(pieces)} pieces")
+    click.echo(f"Manifest: {manifest_path}")
 
 
 @click.command()
