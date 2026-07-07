@@ -161,6 +161,22 @@ def _compute_solution_metrics(original_image, solved_image, piece_size):
     }
 
 
+def _write_comparison_image(path, images):
+    output_path = Path(path)
+    if output_path.parent != Path("."):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    target_height, target_width = images[0].shape[:2]
+    normalized_images = []
+    for image in images:
+        if image.shape[:2] != (target_height, target_width):
+            image = cv.resize(image, (target_width, target_height))
+        normalized_images.append(image)
+
+    comparison_image = np.hstack(normalized_images)
+    cv.imwrite(str(output_path), comparison_image)
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -225,6 +241,11 @@ def _compute_solution_metrics(original_image, solved_image, piece_size):
     type=click.Path(exists=True, readable=True),
     help="Original image used to compute solution-quality metrics.",
 )
+@click.option(
+    "--comparison",
+    type=click.Path(dir_okay=False, writable=True),
+    help="Write side-by-side comparison image to a file.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -237,6 +258,7 @@ def run(
     history: str,
     fitness_plot: str,
     original: str,
+    comparison: str,
 ) -> None:
     """Run puzzle solver.
 
@@ -293,12 +315,19 @@ def run(
     metrics = None
     if original_image is not None:
         metrics = _compute_solution_metrics(original_image, output_image, size)
+    comparison_images = []
+    if original_image is not None:
+        comparison_images.append(original_image)
+    comparison_images.append(input_puzzle)
+    comparison_images.append(output_image)
 
     cv.imwrite(solution, output_image)
     if history is not None:
         _write_fitness_history(history, ga.fitness_history)
     if fitness_plot is not None:
         _write_fitness_plot(fitness_plot, ga.fitness_history)
+    if comparison is not None:
+        _write_comparison_image(comparison, comparison_images)
 
     click.echo("\nPuzzle solved")
     click.echo("Summary:")
@@ -318,6 +347,8 @@ def run(
         click.echo(f"  History: {history}")
     if fitness_plot is not None:
         click.echo(f"  Fitness plot: {fitness_plot}")
+    if comparison is not None:
+        click.echo(f"  Comparison: {comparison}")
     if metrics is not None:
         click.echo(
             "  Piece-position accuracy: "
