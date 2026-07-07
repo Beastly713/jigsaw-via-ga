@@ -11,12 +11,14 @@ from streamlit_app.solver_workflow import (
     MAX_PIECE_SIZE,
     MIN_PIECE_SIZE,
     bgr_to_rgb,
+    collect_snapshot,
     comparison_image,
     create_puzzle_and_manifest,
     crop_to_piece_grid,
     estimate_run_score,
     format_fitness,
     image_to_png_bytes,
+    make_snapshot_callback,
     pil_to_bgr,
     reset_image_analysis_cache,
     run_solver_workflow,
@@ -138,6 +140,52 @@ def test_warning_helpers_warn_without_blocking():
     )
 
 
+def test_snapshot_callback_collects_at_interval():
+    snapshots = []
+
+    class DummyFittest:
+        fitness = 1.25
+
+        def to_image(self):
+            return np.zeros((32, 32, 3), dtype=np.uint8)
+
+    callback = make_snapshot_callback(
+        snapshots=snapshots,
+        snapshot_interval=2,
+    )
+
+    callback(1, DummyFittest())
+    callback(2, DummyFittest())
+    callback(3, DummyFittest())
+    callback(4, DummyFittest())
+
+    assert len(snapshots) == 2
+    assert snapshots[0]["generation"] == 2
+    assert snapshots[0]["fitness"] == 1.25
+    assert snapshots[0]["image"].shape == (32, 32, 3)
+    assert snapshots[1]["generation"] == 4
+
+    collect_snapshot(snapshots, 6, DummyFittest())
+
+    assert snapshots[2]["generation"] == 6
+    assert snapshots[2]["fitness"] == 1.25
+
+
+def test_run_solver_workflow_rejects_invalid_snapshot_interval():
+    image = _sample_bgr_image(width=64, height=64)
+
+    with pytest.raises(ValueError, match="snapshot_interval"):
+        run_solver_workflow(
+            image=image,
+            piece_size=32,
+            generations=2,
+            population=20,
+            mutation_rate=0.05,
+            seed=42,
+            snapshot_interval=0,
+        )
+
+
 def test_run_solver_workflow_returns_result_dictionary():
     image = _sample_bgr_image(width=64, height=64)
 
@@ -148,6 +196,7 @@ def test_run_solver_workflow_returns_result_dictionary():
         population=20,
         mutation_rate=0.05,
         seed=42,
+        snapshot_interval=1,
     )
 
     expected_keys = {
@@ -167,6 +216,9 @@ def test_run_solver_workflow_returns_result_dictionary():
         "generations",
         "mutation_rate",
         "seed",
+        "fitness_history",
+        "snapshots",
+        "snapshot_interval",
     }
 
     assert set(result) == expected_keys
@@ -183,5 +235,17 @@ def test_run_solver_workflow_returns_result_dictionary():
     assert result["generations"] == 2
     assert result["mutation_rate"] == pytest.approx(0.05)
     assert result["seed"] == 42
+    assert result["snapshot_interval"] == 1
     assert result["generations_completed"] >= 1
     assert result["termination_reason"] in {"max_generations", "stagnation"}
+    assert len(result["fitness_history"]) == result["generations_completed"]
+    assert len(result["snapshots"]) == result["generations_completed"]
+    assert result["fitness_history"][0]["generation"] == 1
+    assert set(result["fitness_history"][0]) == {
+        "generation",
+        "best_fitness",
+        "average_fitness",
+        "worst_fitness",
+    }
+    assert result["snapshots"][0]["generation"] == 1
+    assert result["snapshots"][0]["image"].shape == (64, 64, 3)

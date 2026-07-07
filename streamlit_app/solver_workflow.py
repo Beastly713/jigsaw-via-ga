@@ -99,6 +99,33 @@ def comparison_image(
     return np.hstack([original, puzzle, solution])
 
 
+def collect_snapshot(
+    snapshots: list[dict],
+    generation: int,
+    fittest,
+) -> None:
+    snapshots.append(
+        {
+            "generation": generation,
+            "fitness": fittest.fitness,
+            "image": fittest.to_image(),
+        }
+    )
+
+
+def make_snapshot_callback(
+    snapshots: list[dict],
+    snapshot_interval: int,
+):
+    def snapshot_callback(generation, fittest):
+        if generation % snapshot_interval != 0:
+            return
+
+        collect_snapshot(snapshots, generation, fittest)
+
+    return snapshot_callback
+
+
 def image_to_png_bytes(image: np.ndarray) -> bytes:
     rgb_image = bgr_to_rgb(image)
     pil_image = Image.fromarray(rgb_image)
@@ -120,9 +147,14 @@ def run_solver_workflow(
     population: int,
     mutation_rate: float,
     seed: int,
+    snapshot_interval: int = 1,
 ) -> dict:
     set_seed(seed)
 
+    if snapshot_interval <= 0:
+        raise ValueError("snapshot_interval must be a positive integer")
+
+    snapshots: list[dict] = []
     start_time = time.perf_counter()
 
     cropped_image, puzzle_image, manifest = create_puzzle_and_manifest(
@@ -140,9 +172,17 @@ def run_solver_workflow(
         mutation_rate=mutation_rate,
     )
 
+    snapshot_callback = make_snapshot_callback(
+        snapshots=snapshots,
+        snapshot_interval=snapshot_interval,
+    )
+
     stdout_buffer = StringIO()
     with redirect_stdout(stdout_buffer):
-        result = ga.start_evolution(verbose=False)
+        result = ga.start_evolution(
+            verbose=False,
+            generation_callback=snapshot_callback,
+        )
 
     runtime = time.perf_counter() - start_time
     solution_image = result.to_image()
@@ -166,4 +206,7 @@ def run_solver_workflow(
         "generations": generations,
         "mutation_rate": mutation_rate,
         "seed": int(seed),
+        "fitness_history": ga.fitness_history,
+        "snapshots": snapshots,
+        "snapshot_interval": snapshot_interval,
     }

@@ -100,6 +100,17 @@ seed = st.sidebar.number_input(
     help="Integer seed for reproducible shuffling and GA randomness.",
 )
 
+snapshot_interval = st.sidebar.number_input(
+    "Snapshot interval",
+    min_value=1,
+    value=1,
+    step=1,
+    help=(
+        "Capture one in-memory solution snapshot every N completed "
+        "generations. This mirrors the CLI snapshot interval."
+    ),
+)
+
 st.sidebar.caption(
     "Large images, small piece sizes, high generations, and high population "
     "sizes can take longer locally. The app no longer blocks heavy local runs."
@@ -110,6 +121,7 @@ generations = int(generations)
 population = int(population)
 seed = int(seed)
 mutation_rate = float(mutation_rate)
+snapshot_interval = int(snapshot_interval)
 
 run_button = st.sidebar.button("Run solver", type="primary")
 
@@ -168,6 +180,7 @@ if run_button:
             population=population,
             mutation_rate=mutation_rate,
             seed=seed,
+            snapshot_interval=snapshot_interval,
         )
 
     st.success("Solver finished.")
@@ -240,6 +253,8 @@ if "solver_result" in st.session_state:
     st.write(f"Generations completed: {data['generations_completed']}")
     st.write(f"Termination reason: {data['termination_reason']}")
     st.write(f"Metric method: {metrics['metric_method']}")
+    st.write(f"Fitness history rows: {len(data['fitness_history'])}")
+    st.write(f"Snapshots captured: {len(data['snapshots'])}")
 
     st.subheader("Downloads")
 
