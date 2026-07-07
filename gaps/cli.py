@@ -308,8 +308,63 @@ def create(image: str, puzzle: str, size: int, seed: int) -> None:
     click.echo(f"\nCreated puzzle with {len(pieces)} pieces")
 
 
+@click.command()
+@click.argument("puzzle", type=click.Path(exists=True, readable=True))
+@click.argument("baseline", type=click.Path(dir_okay=False, writable=True))
+@click.option(
+    "-s",
+    "--size",
+    type=int,
+    callback=_validate_piece_size,
+    help="Size of single square puzzle piece in pixels. Autodetected if not specified.",
+)
+@click.option(
+    "--seed",
+    type=int,
+    help="Seed for deterministic baseline creation.",
+)
+def baseline(puzzle: str, baseline: str, size: int, seed: int) -> None:
+    """Create random baseline puzzle arrangement.
+
+    \b
+    PUZZLE is the input puzzle image with square pieces.
+    BASELINE is the output random baseline image.
+
+    Examples:
+
+    $ gaps baseline puzzle.jpg baseline.jpg --size=32
+
+    """
+
+    if seed is not None:
+        _set_seed(seed)
+
+    input_puzzle = _read_image(puzzle)
+
+    if size is None:
+        detector = SizeDetector(input_puzzle)
+        size = detector.detect()
+
+    _validate_image_dimensions(input_puzzle, size)
+    pieces, rows, columns = utils.flatten_image(input_puzzle, size)
+
+    np.random.shuffle(pieces)
+    output_image = utils.assemble_image(pieces, rows, columns)
+
+    cv.imwrite(baseline, output_image)
+
+    click.echo("\nRandom baseline created")
+    click.echo("Summary:")
+    click.echo(f"  Pieces: {len(pieces)}")
+    click.echo(f"  Piece size: {size}")
+    if seed is not None:
+        click.echo(f"  Seed: {seed}")
+    click.echo(f"  Output: {baseline}")
+
+
 cli.add_command(run, name="run")
 cli.add_command(create, name="create")
+cli.add_command(baseline, name="baseline")
 
 if __name__ == "__main__":
     cli()  # pylint: disable=no-value-for-parameter
