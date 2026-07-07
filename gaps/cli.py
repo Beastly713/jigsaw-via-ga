@@ -1,3 +1,5 @@
+import random
+
 import click
 import cv2 as cv
 import numpy as np
@@ -40,6 +42,11 @@ def _validate_positive_integer(_context: click.Context, _param: str, value: int)
     return value
 
 
+def _set_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -75,6 +82,11 @@ def _validate_positive_integer(_context: click.Context, _param: str, value: int)
     default=False,
     help="If enabled, shows the best individual after each generation.",
 )
+@click.option(
+    "--seed",
+    type=int,
+    help="Seed for deterministic puzzle solving.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -82,6 +94,7 @@ def run(
     generations: int,
     population: int,
     debug: bool,
+    seed: int,
 ) -> None:
     """Run puzzle solver.
 
@@ -95,6 +108,9 @@ def run(
 
     """
 
+    if seed is not None:
+        _set_seed(seed)
+
     input_puzzle = cv.imread(puzzle)
 
     if size is None:
@@ -104,6 +120,8 @@ def run(
     click.echo(f"Population: {population}")
     click.echo(f"Generations: {generations}")
     click.echo(f"Piece size: {size}")
+    if seed is not None:
+        click.echo(f"Seed: {seed}")
 
     ga = GeneticAlgorithm(
         image=input_puzzle,
@@ -131,7 +149,12 @@ def run(
     callback=_validate_piece_size,
     help="Size of single square puzzle piece in pixels.",
 )
-def create(image: str, puzzle: str, size: int) -> None:
+@click.option(
+    "--seed",
+    type=int,
+    help="Seed for deterministic puzzle creation.",
+)
+def create(image: str, puzzle: str, size: int, seed: int) -> None:
     """Create jigsaw puzzle with square pieces.
 
     \b
@@ -144,6 +167,9 @@ def create(image: str, puzzle: str, size: int) -> None:
 
     """
 
+    if seed is not None:
+        _set_seed(seed)
+
     input_image = cv.imread(image)
     pieces, rows, columns = utils.flatten_image(input_image, size)
 
@@ -155,6 +181,8 @@ def create(image: str, puzzle: str, size: int) -> None:
 
     cv.imwrite(puzzle, output_image)
 
+    if seed is not None:
+        click.echo(f"Seed: {seed}")
     click.echo(f"\nCreated puzzle with {len(pieces)} pieces")
 
 
