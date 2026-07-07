@@ -27,6 +27,8 @@ from streamlit_app.solver_workflow import (
     run_solver_workflow,
     should_warn_heavy_configuration,
     should_warn_piece_count,
+    snapshot_caption,
+    snapshot_filename,
 )
 from gaps.image_analysis import ImageAnalysis
 
@@ -167,11 +169,34 @@ def test_snapshot_callback_collects_at_interval():
     assert snapshots[0]["fitness"] == 1.25
     assert snapshots[0]["image"].shape == (32, 32, 3)
     assert snapshots[1]["generation"] == 4
+    assert snapshot_filename(snapshots[0]) == "generation_0002.png"
+    assert snapshot_caption(snapshots[0]) == "Generation 2 | Fitness: 1.250000"
 
     collect_snapshot(snapshots, 6, DummyFittest())
 
     assert snapshots[2]["generation"] == 6
     assert snapshots[2]["fitness"] == 1.25
+
+
+def test_snapshot_filename_and_caption_formatting():
+    snapshot = {
+        "generation": 7,
+        "fitness": 1.23456789,
+        "image": np.zeros((32, 32, 3), dtype=np.uint8),
+    }
+
+    assert snapshot_filename(snapshot) == "generation_0007.png"
+    assert snapshot_caption(snapshot) == "Generation 7 | Fitness: 1.234568"
+
+
+def test_snapshot_caption_handles_missing_fitness():
+    snapshot = {
+        "generation": 3,
+        "fitness": None,
+        "image": np.zeros((32, 32, 3), dtype=np.uint8),
+    }
+
+    assert snapshot_caption(snapshot) == "Generation 3 | Fitness: n/a"
 
 
 def test_fitness_history_to_csv_bytes_includes_expected_columns():

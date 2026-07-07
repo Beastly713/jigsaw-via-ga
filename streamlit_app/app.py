@@ -24,6 +24,8 @@ from streamlit_app.solver_workflow import (
     estimate_run_score,
     should_warn_heavy_configuration,
     should_warn_piece_count,
+    snapshot_caption,
+    snapshot_filename,
     run_solver_workflow,
 )
 
@@ -276,6 +278,40 @@ if "solver_result" in st.session_state:
         )
     else:
         st.info("No fitness history was recorded for this run.")
+
+    st.subheader("Generation Snapshots")
+
+    snapshots = data["snapshots"]
+
+    if snapshots:
+        st.caption(
+            f"Showing {len(snapshots)} in-memory snapshots captured every "
+            f"{data['snapshot_interval']} completed generation(s)."
+        )
+
+        snapshots_per_row = 3
+        for start in range(0, len(snapshots), snapshots_per_row):
+            row_snapshots = snapshots[start : start + snapshots_per_row]
+            columns = st.columns(snapshots_per_row)
+
+            for column, snapshot in zip(columns, row_snapshots):
+                with column:
+                    st.image(
+                        bgr_to_rgb(snapshot["image"]),
+                        caption=snapshot_caption(snapshot),
+                        use_container_width=True,
+                    )
+                    st.download_button(
+                        "Download snapshot",
+                        data=image_to_png_bytes(snapshot["image"]),
+                        file_name=snapshot_filename(snapshot),
+                        mime="image/png",
+                        key=f"snapshot_download_{start}_{snapshot['generation']}",
+                    )
+    else:
+        st.info(
+            "No snapshots were captured. Try a smaller snapshot interval or more generations."
+        )
 
     st.subheader("Downloads")
 

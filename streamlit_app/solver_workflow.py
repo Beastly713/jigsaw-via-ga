@@ -141,6 +141,20 @@ def image_to_png_bytes(image: np.ndarray) -> bytes:
     return buffer.getvalue()
 
 
+def snapshot_filename(snapshot: dict) -> str:
+    return f"generation_{int(snapshot['generation']):04d}.png"
+
+
+def snapshot_caption(snapshot: dict) -> str:
+    fitness = snapshot.get("fitness")
+    if fitness is None:
+        fitness_text = "n/a"
+    else:
+        fitness_text = f"{fitness:.6f}"
+
+    return f"Generation {snapshot['generation']} | Fitness: {fitness_text}"
+
+
 def format_fitness(value) -> str:
     if value is None:
         return "n/a"
