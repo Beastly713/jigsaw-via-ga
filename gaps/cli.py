@@ -1,4 +1,6 @@
 import random
+import time
+from typing import Optional
 
 import click
 import cv2 as cv
@@ -69,6 +71,13 @@ def _validate_image_dimensions(image: np.ndarray, piece_size: int) -> None:
             f"Piece size {piece_size} does not evenly divide "
             f"image dimensions {width}x{height}"
         )
+
+
+def _format_fitness(fitness: Optional[float]) -> str:
+    if fitness is None:
+        return "N/A"
+
+    return f"{fitness:.6f}"
 
 
 @click.command()
@@ -152,6 +161,8 @@ def run(
         size = detector.detect()
 
     _validate_image_dimensions(input_puzzle, size)
+    height, width = input_puzzle.shape[:2]
+    pieces = (height // size) * (width // size)
 
     click.echo(f"Population: {population}")
     click.echo(f"Generations: {generations}")
@@ -167,12 +178,27 @@ def run(
         generations=generations,
         mutation_rate=mutation_rate,
     )
+    start_time = time.perf_counter()
     result = ga.start_evolution(debug)
+    runtime = time.perf_counter() - start_time
     output_image = result.to_image()
 
     cv.imwrite(solution, output_image)
 
-    click.echo("Puzzle solved")
+    click.echo("\nPuzzle solved")
+    click.echo("Summary:")
+    click.echo(f"  Pieces: {pieces}")
+    click.echo(f"  Piece size: {size}")
+    click.echo(f"  Population size: {population}")
+    click.echo(f"  Generations requested: {generations}")
+    click.echo(f"  Generations completed: {ga.generations_completed}")
+    click.echo(f"  Best fitness: {_format_fitness(ga.best_fitness)}")
+    click.echo(f"  Termination reason: {ga.termination_reason}")
+    click.echo(f"  Runtime: {runtime:.2f}s")
+    click.echo(f"  Mutation rate: {mutation_rate}")
+    if seed is not None:
+        click.echo(f"  Seed: {seed}")
+    click.echo(f"  Output: {solution}")
 
 
 @click.command()
