@@ -5,16 +5,23 @@ import pytest
 from PIL import Image
 
 from streamlit_app.solver_workflow import (
-    MAX_PIECES,
+    DEFAULT_GENERATIONS,
+    DEFAULT_POPULATION,
+    HIGH_PIECE_COUNT_WARNING,
+    MAX_PIECE_SIZE,
+    MIN_PIECE_SIZE,
     bgr_to_rgb,
     comparison_image,
     create_puzzle_and_manifest,
     crop_to_piece_grid,
+    estimate_run_score,
     format_fitness,
     image_to_png_bytes,
     pil_to_bgr,
     reset_image_analysis_cache,
     run_solver_workflow,
+    should_warn_heavy_configuration,
+    should_warn_piece_count,
 )
 from gaps.image_analysis import ImageAnalysis
 
@@ -94,6 +101,41 @@ def test_reset_image_analysis_cache_clears_global_tables():
 def test_format_fitness_handles_none_and_number():
     assert format_fitness(None) == "n/a"
     assert format_fitness(1.23456789) == "1.234568"
+
+
+def test_local_ui_constants_match_cli_defaults_and_piece_size_limits():
+    assert MIN_PIECE_SIZE == 32
+    assert MAX_PIECE_SIZE == 128
+    assert DEFAULT_GENERATIONS == 20
+    assert DEFAULT_POPULATION == 200
+
+
+def test_warning_helpers_warn_without_blocking():
+    assert should_warn_piece_count(HIGH_PIECE_COUNT_WARNING) is False
+    assert should_warn_piece_count(HIGH_PIECE_COUNT_WARNING + 1) is True
+
+    assert (
+        estimate_run_score(total_pieces=100, generations=20, population=200)
+        == 400_000
+    )
+
+    assert (
+        should_warn_heavy_configuration(
+            total_pieces=100,
+            generations=20,
+            population=200,
+        )
+        is False
+    )
+
+    assert (
+        should_warn_heavy_configuration(
+            total_pieces=201,
+            generations=50,
+            population=500,
+        )
+        is True
+    )
 
 
 def test_run_solver_workflow_returns_result_dictionary():

@@ -9,13 +9,37 @@ from PIL import Image
 
 from gaps import utils
 from gaps.cli import (
+    DEFAULT_GENERATIONS,
+    DEFAULT_POPULATION,
+    MAX_PIECE_SIZE,
+    MIN_PIECE_SIZE,
     _compute_solution_metrics_from_manifest,
     _crop_image_to_piece_grid,
 )
 from gaps.genetic_algorithm import GeneticAlgorithm
 from gaps.image_analysis import ImageAnalysis
 
-MAX_PIECES = 150
+HIGH_PIECE_COUNT_WARNING = 150
+HEAVY_CONFIGURATION_WARNING_SCORE = 5_000_000
+
+
+def estimate_run_score(total_pieces: int, generations: int, population: int) -> int:
+    return total_pieces * generations * population
+
+
+def should_warn_piece_count(total_pieces: int) -> bool:
+    return total_pieces > HIGH_PIECE_COUNT_WARNING
+
+
+def should_warn_heavy_configuration(
+    total_pieces: int,
+    generations: int,
+    population: int,
+) -> bool:
+    return (
+        estimate_run_score(total_pieces, generations, population)
+        > HEAVY_CONFIGURATION_WARNING_SCORE
+    )
 
 
 def pil_to_bgr(uploaded_file) -> np.ndarray:

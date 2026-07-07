@@ -9,12 +9,19 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from streamlit_app.solver_workflow import (
-    MAX_PIECES,
+    DEFAULT_GENERATIONS,
+    DEFAULT_POPULATION,
+    HIGH_PIECE_COUNT_WARNING,
+    MAX_PIECE_SIZE,
+    MIN_PIECE_SIZE,
     bgr_to_rgb,
     crop_to_piece_grid,
     format_fitness,
     image_to_png_bytes,
     pil_to_bgr,
+    estimate_run_score,
+    should_warn_heavy_configuration,
+    should_warn_piece_count,
     run_solver_workflow,
 )
 
@@ -39,48 +46,70 @@ uploaded_file = st.sidebar.file_uploader(
     type=["jpg", "jpeg", "png"],
 )
 
-piece_size = st.sidebar.selectbox(
+piece_size = st.sidebar.number_input(
     "Piece size",
-    options=[32, 64, 96, 128],
-    index=1,
-)
-
-generations = st.sidebar.slider(
-    "Generations",
-    min_value=2,
-    max_value=30,
-    value=10,
+    min_value=MIN_PIECE_SIZE,
+    max_value=MAX_PIECE_SIZE,
+    value=64,
     step=1,
+    help=(
+        "Size of each square puzzle piece in pixels. "
+        "Matches the CLI limit of 32 to 128."
+    ),
 )
 
-population = st.sidebar.slider(
+generations = st.sidebar.number_input(
+    "Generations",
+    min_value=1,
+    value=DEFAULT_GENERATIONS,
+    step=1,
+    help=(
+        "Number of GA evolution iterations. "
+        "Higher values can improve results but increase runtime."
+    ),
+)
+
+population = st.sidebar.number_input(
     "Population size",
-    min_value=20,
-    max_value=150,
-    value=50,
-    step=10,
+    min_value=1,
+    value=DEFAULT_POPULATION,
+    step=1,
+    help=(
+        "Number of candidate solutions per generation. "
+        "Higher values increase search diversity and runtime."
+    ),
 )
 
-mutation_rate = st.sidebar.slider(
+mutation_rate = st.sidebar.number_input(
     "Mutation rate",
     min_value=0.0,
-    max_value=0.30,
+    max_value=1.0,
     value=0.05,
     step=0.01,
+    format="%.2f",
+    help=(
+        "Probability of applying swap mutation to each child. "
+        "Matches the CLI range of 0.0 to 1.0."
+    ),
 )
 
 seed = st.sidebar.number_input(
     "Seed",
-    min_value=0,
-    max_value=999999,
     value=42,
     step=1,
+    help="Integer seed for reproducible shuffling and GA randomness.",
 )
 
 st.sidebar.caption(
     "Large images, small piece sizes, high generations, and high population "
-    "sizes can be slow on free deployment resources."
+    "sizes can take longer locally. The app no longer blocks heavy local runs."
 )
+
+piece_size = int(piece_size)
+generations = int(generations)
+population = int(population)
+seed = int(seed)
+mutation_rate = float(mutation_rate)
 
 run_button = st.sidebar.button("Run solver", type="primary")
 
@@ -114,12 +143,21 @@ st.image(
     use_container_width=True,
 )
 
-if total_pieces > MAX_PIECES:
-    st.error(
-        f"This setup creates {total_pieces} pieces, which is above the deployment "
-        f"limit of {MAX_PIECES}. Increase the piece size or upload a smaller image."
+if should_warn_piece_count(total_pieces):
+    st.warning(
+        f"This setup creates {total_pieces} pieces. "
+        f"That is above the old cloud-safe warning threshold of "
+        f"{HIGH_PIECE_COUNT_WARNING}, so the run may take longer locally."
     )
-    st.stop()
+
+if should_warn_heavy_configuration(total_pieces, generations, population):
+    run_score = estimate_run_score(total_pieces, generations, population)
+    st.warning(
+        "This is a heavy local configuration: "
+        f"{total_pieces} pieces × {generations} generations × "
+        f"{population} population = {run_score:,} estimated work score. "
+        "It will still run, but it may take noticeably longer."
+    )
 
 if run_button:
     with st.spinner("Creating puzzle and running Genetic Algorithm..."):
@@ -129,7 +167,7 @@ if run_button:
             generations=generations,
             population=population,
             mutation_rate=mutation_rate,
-            seed=int(seed),
+            seed=seed,
         )
 
     st.success("Solver finished.")
