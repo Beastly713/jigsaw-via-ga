@@ -47,6 +47,23 @@ def _set_seed(seed: int) -> None:
     np.random.seed(seed)
 
 
+def _read_image(path: str) -> np.ndarray:
+    image = cv.imread(path)
+    if image is None:
+        raise click.ClickException(f"Could not read image file: {path}")
+
+    return image
+
+
+def _validate_image_dimensions(image: np.ndarray, piece_size: int) -> None:
+    height, width = image.shape[:2]
+    if height % piece_size != 0 or width % piece_size != 0:
+        raise click.ClickException(
+            f"Piece size {piece_size} does not evenly divide "
+            f"image dimensions {width}x{height}"
+        )
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -54,6 +71,7 @@ def _set_seed(seed: int) -> None:
     "-s",
     "--size",
     type=int,
+    callback=_validate_piece_size,
     help="Size of single square puzzle piece in pixels. Autodetected if not specified.",
 )
 @click.option(
@@ -111,11 +129,13 @@ def run(
     if seed is not None:
         _set_seed(seed)
 
-    input_puzzle = cv.imread(puzzle)
+    input_puzzle = _read_image(puzzle)
 
     if size is None:
         detector = SizeDetector(input_puzzle)
         size = detector.detect()
+
+    _validate_image_dimensions(input_puzzle, size)
 
     click.echo(f"Population: {population}")
     click.echo(f"Generations: {generations}")
@@ -170,7 +190,8 @@ def create(image: str, puzzle: str, size: int, seed: int) -> None:
     if seed is not None:
         _set_seed(seed)
 
-    input_image = cv.imread(image)
+    input_image = _read_image(image)
+    _validate_image_dimensions(input_image, size)
     pieces, rows, columns = utils.flatten_image(input_image, size)
 
     # Randomize pieces in order to make puzzle
