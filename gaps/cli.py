@@ -66,6 +66,15 @@ def _read_image(path: str) -> np.ndarray:
     return image
 
 
+def _write_image(path: str | Path, image: np.ndarray) -> None:
+    output_path = Path(path)
+    if output_path.parent != Path("."):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not cv.imwrite(str(output_path), image):
+        raise click.ClickException(f"Could not write image file: {output_path}")
+
+
 def _validate_image_dimensions(image: np.ndarray, piece_size: int) -> None:
     height, width = image.shape[:2]
     if height % piece_size != 0 or width % piece_size != 0:
@@ -162,10 +171,6 @@ def _compute_solution_metrics(original_image, solved_image, piece_size):
 
 
 def _write_comparison_image(path, images):
-    output_path = Path(path)
-    if output_path.parent != Path("."):
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
     target_height, target_width = images[0].shape[:2]
     normalized_images = []
     for image in images:
@@ -174,7 +179,7 @@ def _write_comparison_image(path, images):
         normalized_images.append(image)
 
     comparison_image = np.hstack(normalized_images)
-    cv.imwrite(str(output_path), comparison_image)
+    _write_image(path, comparison_image)
 
 
 def _make_snapshot_callback(snapshots_dir, snapshot_interval):
@@ -186,7 +191,7 @@ def _make_snapshot_callback(snapshots_dir, snapshot_interval):
             return
 
         output_path = output_dir / f"generation_{generation:04d}.jpg"
-        cv.imwrite(str(output_path), fittest.to_image())
+        _write_image(output_path, fittest.to_image())
 
     return snapshot_callback
 
@@ -332,9 +337,7 @@ def run(
 
     snapshot_callback = None
     if snapshots_dir is not None:
-        snapshot_callback = _make_snapshot_callback(
-            snapshots_dir, snapshot_interval
-        )
+        snapshot_callback = _make_snapshot_callback(snapshots_dir, snapshot_interval)
 
     ga = GeneticAlgorithm(
         image=input_puzzle,
@@ -356,7 +359,7 @@ def run(
     comparison_images.append(input_puzzle)
     comparison_images.append(output_image)
 
-    cv.imwrite(solution, output_image)
+    _write_image(solution, output_image)
     if history is not None:
         _write_fitness_history(history, ga.fitness_history)
     if fitness_plot is not None:
@@ -439,7 +442,7 @@ def create(image: str, puzzle: str, size: int, seed: int) -> None:
     # Create puzzle by stacking pieces
     output_image = utils.assemble_image(pieces, rows, columns)
 
-    cv.imwrite(puzzle, output_image)
+    _write_image(puzzle, output_image)
 
     if seed is not None:
         click.echo(f"Seed: {seed}")
@@ -489,7 +492,7 @@ def baseline(puzzle: str, baseline: str, size: int, seed: int) -> None:
     np.random.shuffle(pieces)
     output_image = utils.assemble_image(pieces, rows, columns)
 
-    cv.imwrite(baseline, output_image)
+    _write_image(baseline, output_image)
 
     click.echo("\nRandom baseline created")
     click.echo("Summary:")
