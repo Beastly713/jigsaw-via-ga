@@ -177,6 +177,20 @@ def _write_comparison_image(path, images):
     cv.imwrite(str(output_path), comparison_image)
 
 
+def _make_snapshot_callback(snapshots_dir, snapshot_interval):
+    output_dir = Path(snapshots_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    def snapshot_callback(generation, fittest):
+        if generation % snapshot_interval != 0:
+            return
+
+        output_path = output_dir / f"generation_{generation:04d}.jpg"
+        cv.imwrite(str(output_path), fittest.to_image())
+
+    return snapshot_callback
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -246,6 +260,19 @@ def _write_comparison_image(path, images):
     type=click.Path(dir_okay=False, writable=True),
     help="Write side-by-side comparison image to a file.",
 )
+@click.option(
+    "--snapshots-dir",
+    type=click.Path(file_okay=False, writable=True),
+    help="Directory for generation snapshot images.",
+)
+@click.option(
+    "--snapshot-interval",
+    type=int,
+    show_default=True,
+    default=1,
+    callback=_validate_positive_integer,
+    help="Save a generation snapshot every N completed generations.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -259,6 +286,8 @@ def run(
     fitness_plot: str,
     original: str,
     comparison: str,
+    snapshots_dir: str,
+    snapshot_interval: int,
 ) -> None:
     """Run puzzle solver.
 
@@ -301,6 +330,12 @@ def run(
     if seed is not None:
         click.echo(f"Seed: {seed}")
 
+    snapshot_callback = None
+    if snapshots_dir is not None:
+        snapshot_callback = _make_snapshot_callback(
+            snapshots_dir, snapshot_interval
+        )
+
     ga = GeneticAlgorithm(
         image=input_puzzle,
         piece_size=size,
@@ -309,7 +344,7 @@ def run(
         mutation_rate=mutation_rate,
     )
     start_time = time.perf_counter()
-    result = ga.start_evolution(debug)
+    result = ga.start_evolution(debug, generation_callback=snapshot_callback)
     runtime = time.perf_counter() - start_time
     output_image = result.to_image()
     metrics = None
@@ -349,6 +384,8 @@ def run(
         click.echo(f"  Fitness plot: {fitness_plot}")
     if comparison is not None:
         click.echo(f"  Comparison: {comparison}")
+    if snapshots_dir is not None:
+        click.echo(f"  Snapshots: {snapshots_dir}")
     if metrics is not None:
         click.echo(
             "  Piece-position accuracy: "

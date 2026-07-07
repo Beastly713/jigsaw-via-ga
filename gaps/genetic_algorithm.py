@@ -40,7 +40,7 @@ class GeneticAlgorithm(object):
         self.best_fitness = None
         self.fitness_history = []
 
-    def start_evolution(self, verbose):
+    def start_evolution(self, verbose, generation_callback=None):
         print("=== Pieces:      {}\n".format(len(self._pieces)))
         self.generations_completed = 0
         self.termination_reason = None
@@ -83,6 +83,8 @@ class GeneticAlgorithm(object):
             fittest = self._best_individual()
             self.generations_completed = generation + 1
             self._record_fitness_history(self.generations_completed)
+            if generation_callback is not None:
+                generation_callback(self.generations_completed, fittest)
 
             if fittest.fitness <= best_fitness_score:
                 termination_counter += 1
