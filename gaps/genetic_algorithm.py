@@ -24,9 +24,15 @@ class GeneticAlgorithm(object):
             Individual(pieces, rows, columns) for _ in range(population_size)
         ]
         self._pieces = pieces
+        self.generations_completed = 0
+        self.termination_reason = None
+        self.best_fitness = None
 
     def start_evolution(self, verbose):
         print("=== Pieces:      {}\n".format(len(self._pieces)))
+        self.generations_completed = 0
+        self.termination_reason = None
+        self.best_fitness = None
 
         if verbose:
             plot = Plot(self._image)
@@ -58,12 +64,16 @@ class GeneticAlgorithm(object):
                 child = crossover.child()
                 new_population.append(child)
 
+            self._population = new_population
             fittest = self._best_individual()
+            self.generations_completed = generation + 1
 
             if fittest.fitness <= best_fitness_score:
                 termination_counter += 1
             else:
                 best_fitness_score = fittest.fitness
+                self.best_fitness = best_fitness_score
+                termination_counter = 0
 
             if termination_counter == self.TERMINATION_THRESHOLD:
                 print("\n\n=== GA terminated")
@@ -72,9 +82,8 @@ class GeneticAlgorithm(object):
                         self.TERMINATION_THRESHOLD
                     )
                 )
+                self.termination_reason = "stagnation"
                 return fittest
-
-            self._population = new_population
 
             if verbose:
                 plot.show_fittest(
@@ -82,6 +91,7 @@ class GeneticAlgorithm(object):
                     "Generation: {} / {}".format(generation + 1, self._generations),
                 )
 
+        self.termination_reason = "max_generations"
         return fittest
 
     def _get_elite_individuals(self, elites):
