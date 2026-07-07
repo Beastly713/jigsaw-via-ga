@@ -117,6 +117,50 @@ def _write_fitness_plot(path: str, history) -> None:
     plt.close()
 
 
+def _compute_solution_metrics(original_image, solved_image, piece_size):
+    original_pieces, rows, columns = utils.flatten_image(original_image, piece_size)
+    solved_pieces, _, _ = utils.flatten_image(solved_image, piece_size)
+
+    correct_positions = sum(
+        np.array_equal(original_piece, solved_piece)
+        for original_piece, solved_piece in zip(original_pieces, solved_pieces)
+    )
+    total_pieces = len(original_pieces)
+
+    original_piece_indexes = {
+        piece.tobytes(): index for index, piece in enumerate(original_pieces)
+    }
+    solved_piece_indexes = [
+        original_piece_indexes.get(piece.tobytes()) for piece in solved_pieces
+    ]
+
+    correct_adjacencies = 0
+    total_adjacencies = rows * (columns - 1) + (rows - 1) * columns
+
+    for row in range(rows):
+        for column in range(columns - 1):
+            left = solved_piece_indexes[row * columns + column]
+            right = solved_piece_indexes[row * columns + column + 1]
+            if left is not None and right is not None and right == left + 1:
+                correct_adjacencies += 1
+
+    for row in range(rows - 1):
+        for column in range(columns):
+            top = solved_piece_indexes[row * columns + column]
+            bottom = solved_piece_indexes[(row + 1) * columns + column]
+            if top is not None and bottom is not None and bottom == top + columns:
+                correct_adjacencies += 1
+
+    return {
+        "piece_position_accuracy": correct_positions / total_pieces,
+        "adjacency_accuracy": (
+            correct_adjacencies / total_adjacencies
+            if total_adjacencies > 0
+            else 0.0
+        ),
+    }
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -176,6 +220,11 @@ def _write_fitness_plot(path: str, history) -> None:
     type=click.Path(dir_okay=False, writable=True),
     help="Write GA fitness history plot to an image file.",
 )
+@click.option(
+    "--original",
+    type=click.Path(exists=True, readable=True),
+    help="Original image used to compute solution-quality metrics.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -187,6 +236,7 @@ def run(
     mutation_rate: float,
     history: str,
     fitness_plot: str,
+    original: str,
 ) -> None:
     """Run puzzle solver.
 
@@ -210,6 +260,15 @@ def run(
         size = detector.detect()
 
     _validate_image_dimensions(input_puzzle, size)
+    original_image = None
+    if original is not None:
+        original_image = _read_image(original)
+        _validate_image_dimensions(original_image, size)
+        if original_image.shape != input_puzzle.shape:
+            raise click.ClickException(
+                "Original image shape does not match puzzle image shape"
+            )
+
     height, width = input_puzzle.shape[:2]
     pieces = (height // size) * (width // size)
 
@@ -231,6 +290,9 @@ def run(
     result = ga.start_evolution(debug)
     runtime = time.perf_counter() - start_time
     output_image = result.to_image()
+    metrics = None
+    if original_image is not None:
+        metrics = _compute_solution_metrics(original_image, output_image, size)
 
     cv.imwrite(solution, output_image)
     if history is not None:
@@ -256,6 +318,14 @@ def run(
         click.echo(f"  History: {history}")
     if fitness_plot is not None:
         click.echo(f"  Fitness plot: {fitness_plot}")
+    if metrics is not None:
+        click.echo(
+            "  Piece-position accuracy: "
+            f"{metrics['piece_position_accuracy'] * 100:.2f}%"
+        )
+        click.echo(
+            f"  Adjacency accuracy: {metrics['adjacency_accuracy'] * 100:.2f}%"
+        )
 
 
 @click.command()
