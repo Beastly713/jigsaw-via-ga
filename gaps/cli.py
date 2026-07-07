@@ -94,6 +94,29 @@ def _write_fitness_history(path: str, history) -> None:
         writer.writerows(history)
 
 
+def _write_fitness_plot(path: str, history) -> None:
+    import matplotlib.pyplot as plt
+
+    output_path = Path(path)
+    if output_path.parent != Path("."):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    generations = [row["generation"] for row in history]
+    best = [row["best_fitness"] for row in history]
+    average = [row["average_fitness"] for row in history]
+
+    plt.figure()
+    plt.plot(generations, best, label="Best fitness")
+    plt.plot(generations, average, label="Average fitness")
+    plt.title("GA Fitness Over Generations")
+    plt.xlabel("Generation")
+    plt.ylabel("Fitness")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig(output_path, bbox_inches="tight")
+    plt.close()
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -148,6 +171,11 @@ def _write_fitness_history(path: str, history) -> None:
     type=click.Path(dir_okay=False, writable=True),
     help="Write GA fitness history to a CSV file.",
 )
+@click.option(
+    "--fitness-plot",
+    type=click.Path(dir_okay=False, writable=True),
+    help="Write GA fitness history plot to an image file.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -158,6 +186,7 @@ def run(
     seed: int,
     mutation_rate: float,
     history: str,
+    fitness_plot: str,
 ) -> None:
     """Run puzzle solver.
 
@@ -206,6 +235,8 @@ def run(
     cv.imwrite(solution, output_image)
     if history is not None:
         _write_fitness_history(history, ga.fitness_history)
+    if fitness_plot is not None:
+        _write_fitness_plot(fitness_plot, ga.fitness_history)
 
     click.echo("\nPuzzle solved")
     click.echo("Summary:")
@@ -223,6 +254,8 @@ def run(
     click.echo(f"  Output: {solution}")
     if history is not None:
         click.echo(f"  History: {history}")
+    if fitness_plot is not None:
+        click.echo(f"  Fitness plot: {fitness_plot}")
 
 
 @click.command()
