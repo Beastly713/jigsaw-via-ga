@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import random
+
 from operator import attrgetter
 
 from gaps import utils
@@ -14,11 +16,20 @@ from gaps.selection import roulette_selection
 class GeneticAlgorithm(object):
     TERMINATION_THRESHOLD = 10
 
-    def __init__(self, image, piece_size, population_size, generations, elite_size=2):
+    def __init__(
+        self,
+        image,
+        piece_size,
+        population_size,
+        generations,
+        elite_size=2,
+        mutation_rate=0.0,
+    ):
         self._image = image
         self._piece_size = piece_size
         self._generations = generations
         self._elite_size = elite_size
+        self._mutation_rate = mutation_rate
         pieces, rows, columns = utils.flatten_image(image, piece_size, indexed=True)
         self._population = [
             Individual(pieces, rows, columns) for _ in range(population_size)
@@ -62,6 +73,8 @@ class GeneticAlgorithm(object):
                 crossover = Crossover(first_parent, second_parent)
                 crossover.run()
                 child = crossover.child()
+                if random.random() < self._mutation_rate:
+                    self._mutate(child)
                 new_population.append(child)
 
             self._population = new_population
@@ -101,3 +114,18 @@ class GeneticAlgorithm(object):
     def _best_individual(self):
         """Returns the fittest individual from population"""
         return max(self._population, key=attrgetter("fitness"))
+
+    def _mutate(self, individual):
+        """Swaps two random pieces in an individual."""
+        if len(individual.pieces) < 2:
+            return
+
+        first_index, second_index = random.sample(range(len(individual.pieces)), 2)
+        individual.pieces[first_index], individual.pieces[second_index] = (
+            individual.pieces[second_index],
+            individual.pieces[first_index],
+        )
+        individual._piece_mapping = {
+            piece.id: index for index, piece in enumerate(individual.pieces)
+        }
+        individual._fitness = None

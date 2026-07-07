@@ -42,6 +42,13 @@ def _validate_positive_integer(_context: click.Context, _param: str, value: int)
     return value
 
 
+def _validate_mutation_rate(_context: click.Context, _param: str, value: float) -> float:
+    if value < 0.0 or value > 1.0:
+        raise click.BadParameter("Should be between 0.0 and 1.0.")
+
+    return value
+
+
 def _set_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -105,6 +112,14 @@ def _validate_image_dimensions(image: np.ndarray, piece_size: int) -> None:
     type=int,
     help="Seed for deterministic puzzle solving.",
 )
+@click.option(
+    "--mutation-rate",
+    type=float,
+    show_default=True,
+    default=0.0,
+    callback=_validate_mutation_rate,
+    help="Probability of applying swap mutation to each child.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -113,6 +128,7 @@ def run(
     population: int,
     debug: bool,
     seed: int,
+    mutation_rate: float,
 ) -> None:
     """Run puzzle solver.
 
@@ -140,6 +156,7 @@ def run(
     click.echo(f"Population: {population}")
     click.echo(f"Generations: {generations}")
     click.echo(f"Piece size: {size}")
+    click.echo(f"Mutation rate: {mutation_rate}")
     if seed is not None:
         click.echo(f"Seed: {seed}")
 
@@ -148,6 +165,7 @@ def run(
         piece_size=size,
         population_size=population,
         generations=generations,
+        mutation_rate=mutation_rate,
     )
     result = ga.start_evolution(debug)
     output_image = result.to_image()
