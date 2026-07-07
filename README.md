@@ -1,138 +1,183 @@
 # Genetic Algorithm Jigsaw Puzzle Solver
 
-This project solves square-piece jigsaw puzzles using a Genetic Algorithm (GA).
-Given a shuffled puzzle image, the goal is to reconstruct the original image by
-searching for a good arrangement of pieces.
+This project creates and solves square-piece jigsaw puzzles from images. It can
+shuffle an input image into a puzzle, record the true piece mapping, and then
+try to reconstruct the puzzle.
 
-Jigsaw reconstruction is a combinatorial optimization problem: even a modest
-number of pieces creates a very large search space. Instead of brute forcing all
-possible arrangements, this project uses an evolutionary search process to
-improve candidate solutions over generations.
+The solver uses a Genetic Algorithm instead of brute force. Candidate
+arrangements are improved over generations using fitness scoring, selection,
+crossover, mutation, and elitism.
 
-## Why This Is an AI Project
+The project provides both a command-line workflow and a local Streamlit
+dashboard for visualizing solver behavior, generated artifacts, metrics,
+fitness history, and generation snapshots.
 
-The solver uses a Genetic Algorithm, a population-based AI search technique.
-Each candidate solution is an arrangement of puzzle pieces. The algorithm
-evaluates candidates using a fitness function, selects better individuals,
-combines them through crossover, applies mutation, preserves strong candidates
-through elitism, and terminates when it reaches the requested maximum number of
-generations or when progress stagnates.
+## What the Project Does
 
-Core AI concepts used:
+- Creates shuffled puzzles from an input image.
+- Records puzzle-to-original piece mapping in a manifest.
+- Solves the puzzle with a Genetic Algorithm.
+- Tracks fitness over generations.
+- Evaluates the solution with manifest-based metrics.
+- Exports artifacts such as solution image, comparison image, CSV, plot, and snapshots.
+- Provides a local dashboard for visualization.
 
-- population-based search
-- fitness evaluation
-- selection
-- crossover
-- mutation
-- elitism
-- termination by max generations or stagnation
+## AI / GA Approach
 
-## Workflow
+- `Individual`: one candidate arrangement of puzzle pieces.
+- `Population`: a set of candidate arrangements.
+- `Fitness`: score based on how compatible neighboring piece edges are.
+- `Selection`: fitter candidates are more likely to reproduce.
+- `Crossover`: combines parent arrangements into a child arrangement.
+- `Mutation`: randomly swaps pieces.
+- `Elitism`: preserves strong candidates between generations.
+- `Termination`: stops at the requested maximum generations or after stagnation.
+
+The implementation tracks `generations_completed`, `termination_reason`,
+`best_fitness`, and per-generation fitness history.
+
+## Assumptions and Limitations
+
+- Pieces are square and non-overlapping.
+- Piece orientation is fixed.
+- There are no missing pieces.
+- Pieces are not rotated.
+- Images are cropped to a valid grid during puzzle creation.
+- Larger piece counts and larger GA settings increase runtime.
+- This is an educational/coursework solver, not a production-grade arbitrary
+  jigsaw solver.
+
+## Project Structure
 
 ```text
-original image
--> crop to a valid piece grid if needed
--> create shuffled puzzle + puzzle manifest
--> run GA solver
--> track fitness
--> save solution/artifacts
+gaps/              Core solver, GA, fitness, crossover, selection, CLI
+streamlit_app/     Local Streamlit visualization dashboard
+scripts/           Demo, experiment, and cleanup scripts
+images/            Sample images used for demos
+tests/             Unit and workflow tests
+outputs/           Generated artifacts; ignored by git
+```
+
+## Architecture
+
+The project is organized around a small pipeline:
+
+```text
+input image
+-> crop to a valid square-piece grid
+-> split into pieces
+-> shuffle pieces and write a manifest
+-> run the Genetic Algorithm solver
+-> assemble the best candidate solution
 -> evaluate with manifest-based metrics
+-> export images, CSVs, plots, snapshots, and dashboard downloads
 ```
 
-The puzzle manifest records the mapping from shuffled puzzle-piece IDs to
-original-piece IDs. The solver uses this mapping to compute solution-quality
-metrics after a run.
+Core responsibilities:
 
-## Installation
+- `gaps/cli.py`: command-line entrypoint for puzzle creation, solving, and baseline generation.
+- `gaps/utils.py`: image splitting and reassembly helpers.
+- `gaps/genetic_algorithm.py`: GA loop, elitism, mutation, history tracking, and termination state.
+- `gaps/individual.py`: candidate puzzle arrangement and fitness access.
+- `gaps/image_analysis.py` and `gaps/fitness.py`: edge compatibility cache and dissimilarity scoring.
+- `gaps/crossover.py` and `gaps/selection.py`: reproduction logic for the GA.
+- `streamlit_app/solver_workflow.py`: in-memory workflow used by the local dashboard.
+- `streamlit_app/app.py`: Streamlit UI for controls, results, charts, snapshots, and downloads.
+- `scripts/`: reproducible demo, experiment, and cleanup entrypoints.
 
-Create a virtual environment and install the project dependencies as usual for
-this repository. The commands below assume the project is installed in `.venv`
-and that the `gaps` console script is available at `.venv/bin/gaps`.
+## Tech Stack Used
+
+- Python: core language for the solver, CLI, scripts, and dashboard.
+- NumPy: array operations for image pieces and puzzle assembly.
+- OpenCV: image file loading, writing, resizing, and piece-size detection support.
+- Pillow: image conversion and PNG byte generation for dashboard downloads.
+- Click: `gaps` command-line interface.
+- Matplotlib: fitness plot generation from CLI runs.
+- Streamlit: local visualization dashboard.
+- pytest: automated tests for solver workflow, metrics, and utility behavior.
+
+## Setup
 
 ```bash
-.venv/bin/python -m pytest
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r streamlit_app/requirements.txt pytest poetry-core
+python -m pip install -e . --no-deps --no-build-isolation
 ```
 
-## Main CLI Usage
+`streamlit_app/requirements.txt` contains the runtime dependencies needed for
+the local dashboard. The editable install exposes the local `gaps` package and
+CLI. The `--no-deps --no-build-isolation` flags avoid reinstalling conflicting
+pinned dependencies when the local environment already has compatible packages.
 
-### Create Puzzle
+## Run Tests
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps create images/baboon.jpg outputs/demo/puzzle.jpg --size=64 --seed=42
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pytest
 ```
 
-This creates a shuffled square-piece puzzle and writes a manifest JSON next to
-the puzzle. The manifest stores the true shuffle mapping used later for
-solution-quality metrics.
+`MPLCONFIGDIR=/tmp/matplotlib` avoids local matplotlib cache or permission
+issues on some Linux systems.
 
-The command writes:
-
-- `outputs/demo/puzzle.jpg`
-- `outputs/demo/puzzle.manifest.json`
-
-If the image dimensions are not divisible by the piece size, the CLI crops the
-image to the nearest valid centered grid before creating pieces.
-
-You can also provide the manifest path explicitly:
+## Local Streamlit Dashboard
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps create images/baboon.jpg outputs/demo/puzzle.jpg \
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m streamlit run streamlit_app/app.py
+```
+
+Dashboard flow:
+
+- Upload a JPG or PNG image.
+- Choose piece size, generations, population, mutation rate, seed, and snapshot interval.
+- Preview the cropped image, grid, and piece count.
+- Run the solver.
+- Inspect the Overview, Images, Metrics, Fitness History, Snapshots, and
+  Downloads & Log tabs.
+
+Dashboard downloads:
+
+- Solution PNG.
+- Comparison PNG.
+- Puzzle manifest JSON.
+- Fitness history CSV.
+- Individual snapshot PNGs.
+
+## CLI Workflow
+
+The CLI command is `gaps`. The available commands are `create`, `run`, and
+`baseline`.
+
+### Create a Puzzle
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps create images/messi.jpg outputs/demo/puzzle.jpg \
   --size=64 \
   --seed=42 \
   --manifest outputs/demo/puzzle.manifest.json
 ```
 
-### Run Solver
+This creates:
+
+- `outputs/demo/puzzle.jpg`
+- `outputs/demo/puzzle.manifest.json`
+
+The manifest stores the shuffled puzzle-piece ID to original-piece ID mapping.
+
+### Create a Random Baseline
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps run outputs/demo/puzzle.jpg outputs/demo/solution.jpg \
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps baseline outputs/demo/puzzle.jpg outputs/demo/baseline.jpg \
   --size=64 \
-  --generations=20 \
-  --population=100 \
-  --seed=42 \
-  --mutation-rate=0.05 \
-  --history outputs/demo/history.csv \
-  --fitness-plot outputs/demo/fitness.png \
-  --original images/baboon.jpg \
-  --manifest outputs/demo/puzzle.manifest.json \
-  --comparison outputs/demo/comparison.jpg \
-  --snapshots-dir outputs/demo/snapshots \
-  --snapshot-interval 5
+  --seed=42
 ```
 
-This runs the Genetic Algorithm and writes the solved image plus optional
-artifacts:
+The baseline creates a random shuffled arrangement without GA optimization.
 
-- fitness history CSV
-- fitness plot
-- solution-quality metrics
-- side-by-side comparison image
-- generation snapshots
-
-The `--manifest` option enables paper-aligned solution-quality metrics. If
-`--manifest` is not provided, `gaps run` automatically looks for
-`puzzle.manifest.json` next to the puzzle image. The `--original` option is now
-only needed for comparison image output, not for metrics.
-
-### Random Baseline
+### Run the GA Solver
 
 ```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps baseline outputs/demo/puzzle.jpg outputs/demo/baseline.jpg --size=64 --seed=42
-```
-
-The random baseline creates a shuffled arrangement without GA optimization. It
-is useful as a simple comparison point for the GA output.
-
-## Example: Messi Image Workflow
-
-```bash
-.venv/bin/python scripts/clean_artifacts.py
-
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps create images/messi.jpg outputs/demo/puzzle.jpg --size=64 --seed=42
-
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps baseline outputs/demo/puzzle.jpg outputs/demo/baseline.jpg --size=64 --seed=42
-
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps run outputs/demo/puzzle.jpg outputs/demo/solution.jpg \
   --size=64 \
   --generations=20 \
@@ -148,166 +193,111 @@ MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps run outputs/demo/puzzle.jpg outputs/
   --snapshot-interval 1
 ```
 
-Sample run output from one deterministic run:
+- `--manifest` enables solution-quality metrics.
+- If `--manifest` is omitted, the CLI looks for a default manifest next to the puzzle.
+- `--original` is used for the comparison image.
+- `--history` writes per-generation fitness CSV.
+- `--fitness-plot` writes the fitness plot.
+- `--snapshots-dir` writes generation snapshots.
 
-```text
-Cropped image from 976x549 to 960x512 to fit piece size 64
-Created puzzle with 120 pieces
-Manifest: outputs/demo/puzzle.manifest.json
+CLI defaults and ranges:
 
-Metric method: manifest
-Piece-position accuracy: 97.50%
-Correct positions: 117/120
-Adjacency accuracy: 97.24%
-Correct adjacencies: 211/217
-```
+- Piece size: `32` to `128`.
+- Default generations: `20`.
+- Default population: `200`.
+- Mutation rate: `0.0` to `1.0`.
 
 ## Demo Script
-
-Run the full project workflow with one command:
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python scripts/run_demo.py
 ```
 
-The demo uses `images/baboon.jpg` with piece size `64` and writes artifacts to
-`outputs/demo/`:
+The demo runs create -> baseline -> solve. It uses `images/baboon.jpg`, seed
+`42`, piece size `64`, generations `20`, population `100`, mutation rate
+`0.05`, and snapshot interval `5`.
 
-- `puzzle.jpg`
-- `puzzle.manifest.json`
-- `baseline.jpg`
-- `solution.jpg`
-- `history.csv`
-- `fitness.png`
-- `comparison.jpg`
-- `snapshots/`
+Artifacts are written to `outputs/demo/`:
 
-The demo script explicitly passes the manifest to the solver, so
-solution-quality metrics are computed using manifest-based piece identity.
-
-The GA may terminate early when progress stagnates, so the number of snapshot
-images can be smaller than the requested maximum number of generations.
+- Puzzle image.
+- Manifest JSON.
+- Random baseline image.
+- Solution image.
+- Fitness history CSV.
+- Fitness plot.
+- Comparison image.
+- Generation snapshots.
 
 ## Experiment Script
-
-Run a small experiment grid:
 
 ```bash
 MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python scripts/run_experiments.py
 ```
 
-The experiment runner reuses one generated puzzle and manifest across all runs
-so configurations are compared on the same shuffled puzzle. It compares a small
-set of GA configurations over generations and mutation rate, and writes:
+The experiment script creates one base puzzle and manifest, then runs a small
+grid of GA configurations:
 
-```text
-outputs/experiments/puzzle.manifest.json
-outputs/experiments/results.csv
+- Generations: `[10, 20]`.
+- Population: `[50]`.
+- Mutation rates: `[0.0, 0.05, 0.1]`.
+
+Results are written to `outputs/experiments/results.csv`. The CSV is useful for
+comparing generations, mutation rate, runtime, fitness, and manifest metrics.
+
+## Cleanup
+
+```bash
+.venv/bin/python scripts/clean_artifacts.py
 ```
 
-The CSV includes `manifest_path`, `piece_position_accuracy`, and
-`adjacency_accuracy`. It is useful for comparing how configuration choices
-affect fitness, runtime, completed generations, termination reason, and
-solution-quality metrics.
+Dry run:
+
+```bash
+.venv/bin/python scripts/clean_artifacts.py --dry-run
+```
+
+The cleanup script removes generated outputs and common root-level generated
+files.
 
 ## Metrics Explained
 
-- `best_fitness`: best GA optimization score found in a run. Higher is better
-  because lower edge dissimilarity is converted into higher fitness.
-- `average_fitness`: average population fitness per generation, saved in the
-  history CSV and plotted when requested.
-- `piece-position accuracy` / direct comparison: percentage of pieces placed in
-  their exact original cell. This is useful but secondary because shifted
-  solutions can score poorly.
-- `adjacency accuracy` / neighbor comparison: percentage of correct neighboring
-  piece relationships in the solved arrangement. This is the primary accuracy
-  metric used for final solution quality.
-- `correct positions`: raw count behind piece-position accuracy.
-- `correct adjacencies`: raw count behind adjacency accuracy.
-- `runtime`: wall-clock time reported by the CLI for the GA solve.
+- `best_fitness`: best internal GA fitness score; higher is better.
+- `average_fitness`: average population fitness per generation.
+- `worst_fitness`: lowest population fitness per generation.
+- `piece-position accuracy`: percentage of pieces in exact original locations.
+- `adjacency accuracy`: percentage of correct neighboring piece relationships.
+- `correct positions`: raw count for direct comparison.
+- `correct adjacencies`: raw count for neighbor comparison.
+- `runtime`: wall-clock solve time.
 - `generations completed`: number of generations actually executed.
-- `termination reason`: whether the GA stopped at max generations or due to
-  stagnation.
+- `termination reason`: `max_generations` or `stagnation`.
 
-The final solution-quality metrics are computed from the puzzle manifest, not
-by comparing raw image bytes. This makes the metrics robust to JPEG save/load
-behavior.
+Adjacency accuracy is usually the more meaningful final quality metric because
+shifted but correctly connected puzzle segments can have poor absolute position
+accuracy.
 
-### Why Adjacency Accuracy Is Primary
+The final solution-quality metrics are computed using the puzzle manifest rather
+than raw image-byte comparison.
 
-The referenced jigsaw-solving literature reports two common measures: direct
-comparison and neighbor comparison. Neighbor comparison is usually more
-meaningful because a solution can contain correctly assembled segments even if
-the whole segment is shifted away from its absolute original location.
-Therefore this project reports both, but treats adjacency accuracy as the
-headline solution-quality score.
-
-## Project Structure
+## Recommended Quick Demo Settings
 
 ```text
-gaps/       core solver, GA, fitness, crossover, selection, CLI
-scripts/    reproducible demo, experiment, and artifact cleanup runners
-images/     sample images used for testing and demos
-outputs/    generated puzzles, manifests, solutions, plots, CSVs, snapshots; ignored by git
+image: images/messi.jpg
+piece size: 64
+generations: 20
+population: 100
+mutation rate: 0.05
+seed: 42
+snapshot interval: 1 or 5
 ```
 
-## Testing
+These settings are useful for a local coursework demonstration because they
+generate visible artifacts without making the run unnecessarily large.
 
-Run the test suite with:
+## Notes for Evaluation
 
-```bash
-MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pytest
-```
-
-The current test suite includes manifest validation and manifest-based metric
-tests.
-
-Current expected local result: 10 passed.
-
-## Current Limitations
-
-- The project works on square-piece Type-1 puzzles: piece orientation and
-  puzzle dimensions are known.
-- `gaps create` can crop images to a valid centered grid, but the solver still
-  expects an input puzzle whose dimensions are divisible by the chosen piece
-  size.
-- Solution-quality metrics require a puzzle manifest. Puzzles not created
-  through `gaps create` can still be solved, but paper-aligned accuracy metrics
-  will be unavailable unless a valid manifest is provided.
-- The GA may not fully solve harder or larger puzzles in low-generation demo
-  settings.
-- There is no web UI yet.
-
-## Future Work
-
-- Streamlit demo
-- richer experiment grid
-- GIF or video generation from snapshots
-- improved heuristic, crossover, and mutation variants
-- simple demo page
-
-## Reference
-
-This project is inspired by research on automatic jigsaw puzzle solving with
-genetic algorithms:
-
-```text
-@article{Sholomon2016,
-  doi = {10.1007/s10710-015-9258-0},
-  url = {https://doi.org/10.1007/s10710-015-9258-0},
-  year = {2016},
-  month = feb,
-  publisher = {Springer Science and Business Media {LLC}},
-  volume = {17},
-  number = {3},
-  pages = {291--313},
-  author = {Dror Sholomon and Omid E. David and Nathan S. Netanyahu},
-  title = {An automatic solver for very large jigsaw puzzles using genetic algorithms},
-  journal = {Genetic Programming and Evolvable Machines}
-}
-```
-
-## License
-
-This project is available as open source under the terms of the
-[MIT License](LICENSE).
+- The local dashboard is the best way to present the project visually.
+- The CLI is useful for reproducible artifact generation.
+- The experiment script gives a small structured comparison of GA settings.
+- The manifest is important because it makes solution metrics deterministic and meaningful.
+---
