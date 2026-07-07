@@ -28,6 +28,8 @@ class Individual(object):
 
     def __init__(self, pieces, rows, columns, shuffle=True):
         self.pieces = pieces[:]
+        for piece in self.pieces:
+            piece.image = piece.image.astype(float)
         self.rows = rows
         self.columns = columns
         self._fitness = None
@@ -74,7 +76,7 @@ class Individual(object):
 
     def piece_size(self):
         """Returns single piece size"""
-        return self.pieces[0].size
+        return self.pieces[0].size()
 
     def piece_by_id(self, identifier):
         """ "Return specific piece from individual"""

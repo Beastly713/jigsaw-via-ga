@@ -32,7 +32,9 @@ def flatten_image(image, piece_size, indexed=False):
                 (x + 1) * piece_size,
                 (y + 1) * piece_size,
             )
-            piece = np.empty((piece_size, piece_size, image.shape[2]))
+            piece = np.empty(
+                (piece_size, piece_size, image.shape[2]), dtype=image.dtype
+            )
             piece[:piece_size, :piece_size, :] = image[top:h, left:w, :]
             pieces.append(piece)
 

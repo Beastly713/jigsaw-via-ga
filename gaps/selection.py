@@ -20,9 +20,11 @@ def roulette_selection(population, elites=4):
 
     """
     fitness_values = [individual.fitness for individual in population]
-    probability_intervals = [
-        sum(fitness_values[: i + 1]) for i in range(len(fitness_values))
-    ]
+    probability_intervals = []
+    cumulative_fitness = 0
+    for fitness in fitness_values:
+        cumulative_fitness += fitness
+        probability_intervals.append(cumulative_fitness)
 
     def select_individual():
         """Selects random individual from population based on fitess value"""
