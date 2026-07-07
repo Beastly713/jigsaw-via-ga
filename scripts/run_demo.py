@@ -6,6 +6,7 @@ from pathlib import Path
 IMAGE = Path("images/baboon.jpg")
 OUTPUT_DIR = Path("outputs/demo")
 SNAPSHOTS_DIR = OUTPUT_DIR / "snapshots"
+MANIFEST = OUTPUT_DIR / "puzzle.manifest.json"
 
 SEED = "42"
 SIZE = "64"
@@ -46,6 +47,8 @@ def main():
             SIZE,
             "--seed",
             SEED,
+            "--manifest",
+            str(MANIFEST),
         ],
     )
 
@@ -86,6 +89,8 @@ def main():
             str(fitness_plot),
             "--original",
             str(IMAGE),
+            "--manifest",
+            str(MANIFEST),
             "--comparison",
             str(comparison),
             "--snapshots-dir",
@@ -97,6 +102,7 @@ def main():
 
     artifacts = [
         puzzle,
+        MANIFEST,
         baseline,
         solution,
         history,

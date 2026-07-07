@@ -12,6 +12,10 @@ ROOT_GENERATED_FILES = [
     Path("puzzle.jpg"),
     Path("solution.jpg"),
     Path("baseline.jpg"),
+    Path("puzzle.manifest.json"),
+    Path("demo_puzzle.manifest.json"),
+    Path("baseline.manifest.json"),
+    Path("solution.manifest.json"),
 
     Path("puzzle_plot.jpg"),
     Path("solution_plot.jpg"),

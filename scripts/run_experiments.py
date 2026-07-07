@@ -10,6 +10,7 @@ from pathlib import Path
 IMAGE = Path("images/baboon.jpg")
 OUTPUT_DIR = Path("outputs/experiments")
 PUZZLE = OUTPUT_DIR / "puzzle.jpg"
+MANIFEST = OUTPUT_DIR / "puzzle.manifest.json"
 RESULTS = OUTPUT_DIR / "results.csv"
 
 SEED = 42
@@ -30,6 +31,7 @@ FIELDNAMES = [
     "runtime_seconds",
     "piece_position_accuracy",
     "adjacency_accuracy",
+    "manifest_path",
     "history_path",
     "solution_path",
 ]
@@ -80,6 +82,8 @@ def main():
             str(SIZE),
             "--seed",
             str(SEED),
+            "--manifest",
+            str(MANIFEST),
         ]
     )
 
@@ -113,6 +117,8 @@ def main():
             str(history_path),
             "--original",
             str(IMAGE),
+            "--manifest",
+            str(MANIFEST),
         ]
 
         start = time.perf_counter()
@@ -140,6 +146,7 @@ def main():
                 "adjacency_accuracy": percent_value(
                     result.stdout, "Adjacency accuracy"
                 ),
+                "manifest_path": MANIFEST,
                 "history_path": history_path,
                 "solution_path": solution_path,
             }
