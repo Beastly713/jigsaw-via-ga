@@ -38,12 +38,14 @@ class GeneticAlgorithm(object):
         self.generations_completed = 0
         self.termination_reason = None
         self.best_fitness = None
+        self.fitness_history = []
 
     def start_evolution(self, verbose):
         print("=== Pieces:      {}\n".format(len(self._pieces)))
         self.generations_completed = 0
         self.termination_reason = None
         self.best_fitness = None
+        self.fitness_history = []
 
         if verbose:
             plot = Plot(self._image)
@@ -80,6 +82,7 @@ class GeneticAlgorithm(object):
             self._population = new_population
             fittest = self._best_individual()
             self.generations_completed = generation + 1
+            self._record_fitness_history(self.generations_completed)
 
             if fittest.fitness <= best_fitness_score:
                 termination_counter += 1
@@ -114,6 +117,17 @@ class GeneticAlgorithm(object):
     def _best_individual(self):
         """Returns the fittest individual from population"""
         return max(self._population, key=attrgetter("fitness"))
+
+    def _record_fitness_history(self, generation):
+        fitness_values = [individual.fitness for individual in self._population]
+        self.fitness_history.append(
+            {
+                "generation": generation,
+                "best_fitness": max(fitness_values),
+                "average_fitness": sum(fitness_values) / len(fitness_values),
+                "worst_fitness": min(fitness_values),
+            }
+        )
 
     def _mutate(self, individual):
         """Swaps two random pieces in an individual."""
