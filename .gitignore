@@ -10,6 +10,7 @@ __pycache__/
 # Images
 *.jpg
 !images/
+outputs/
 
 # C extensions
 *.so
