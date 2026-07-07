@@ -1,111 +1,193 @@
-<h1 align=center>
-  <img src="logo/LogoHorizontal.png" width=50%>
-</h1>
+# Genetic Algorithm Jigsaw Puzzle Solver
 
-Genetic Algorithm based solver for jigsaw puzzles with piece size
-auto-detection.
+This project solves square-piece jigsaw puzzles using a Genetic Algorithm (GA).
+Given a shuffled puzzle image, the goal is to reconstruct the original image by
+searching for a good arrangement of pieces.
 
-[![gaps](https://github.com/nemanja-m/gaps/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/nemanja-m/gaps/actions/workflows/ci.yml)
+Jigsaw reconstruction is a combinatorial optimization problem: even a modest
+number of pieces creates a very large search space. Instead of brute forcing all
+possible arrangements, this project uses an evolutionary search process to
+improve candidate solutions over generations.
 
-<p align="center">
-  <img src="images/lena.gif" alt="demo" />
-</p>
+## Why This Is an AI Project
 
-# Installation
+The solver uses a Genetic Algorithm, a population-based AI search technique.
+Each candidate solution is an arrangement of puzzle pieces. The algorithm
+evaluates candidates using a fitness function, selects better individuals,
+combines them through crossover, applies mutation, preserves strong candidates
+through elitism, and terminates when it reaches the requested maximum number of
+generations or when progress stagnates.
 
-Clone repo:
+Core AI concepts used:
 
-```bash
-git clone https://github.com/nemanja-m/gaps.git
-cd gaps
+- population-based search
+- fitness evaluation
+- selection
+- crossover
+- mutation
+- elitism
+- termination by max generations or stagnation
+
+## Workflow
+
+```text
+original image
+-> create shuffled puzzle
+-> run GA solver
+-> track fitness
+-> save solution/artifacts
+-> evaluate with metrics
 ```
 
-Install requirements:
+## Installation
+
+Create a virtual environment and install the project dependencies as usual for
+this repository. The commands below assume the project is installed in `.venv`
+and that the `gaps` console script is available at `.venv/bin/gaps`.
 
 ```bash
-poetry install
+.venv/bin/python -m pytest
 ```
 
-Install project locally:
+## Main CLI Usage
+
+### Create Puzzle
 
 ```bash
-pip install .
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps create images/baboon.jpg outputs/demo/puzzle.jpg --size=64 --seed=42
 ```
 
-# Creating puzzles from images
+This creates a shuffled square-piece puzzle from the original image.
 
-To create puzzle from image use `gaps create`
+### Run Solver
 
 ```bash
-gaps create images/pillars.jpg puzzle.jpg --size=64
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps run outputs/demo/puzzle.jpg outputs/demo/solution.jpg \
+  --size=64 \
+  --generations=20 \
+  --population=100 \
+  --seed=42 \
+  --mutation-rate=0.05 \
+  --history outputs/demo/history.csv \
+  --fitness-plot outputs/demo/fitness.png \
+  --original images/baboon.jpg \
+  --comparison outputs/demo/comparison.jpg \
+  --snapshots-dir outputs/demo/snapshots \
+  --snapshot-interval 5
 ```
 
-will create puzzle with 240 pieces from `images/pillars.jpg` where each piece is
-64x64 pixels.
+This runs the Genetic Algorithm and writes the solved image plus optional
+artifacts:
 
-<div align="center">
-  <img src="images/pillars.jpg" alt="original" width="250" height="180" />
-  &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
-  <img src="images/demo_puzzle.jpg" alt="puzzle" width="250" height="180" />
-</div>
+- fitness history CSV
+- fitness plot
+- solution-quality metrics
+- side-by-side comparison image
+- generation snapshots
 
-Run `gaps create --help` for detailed help.
-
-__NOTE__: Created puzzle image dimensions may be smaller then original image
-depending on the given puzzle piece size. Maximum possible rectangle is cropped
-from original image.
-
-# Solving puzzles
-
-In order to solve puzzles, use `gaps run`:
+### Random Baseline
 
 ```bash
-gaps run puzzle.jpg solution.jpg --generations=20 --population=600
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/gaps baseline outputs/demo/puzzle.jpg outputs/demo/baseline.jpg --size=64 --seed=42
 ```
 
-This will start genetic algorithm with initial population of 600 and 20 generations.
+The random baseline creates a shuffled arrangement without GA optimization. It
+is useful as a simple comparison point for the GA output.
 
-Following options are provided:
+## Demo Script
 
-Option          | Description
---------------- | -----------
-`--size`        | Puzzle piece size in pixels
-`--generations` | Number of generations for genetic algorithm
-`--population`  | Number of individuals in population
-`--debug`       | Show the best solution after each generation
-
-Run `gaps run --help` for detailed help.
-
-## Size detection
-
-If you don't explicitly provide `--size` argument to `gaps run`, piece size will
-be detected automatically.
-
-However, you can always provide `gaps run` with `--size` argument explicitly:
+Run the full project workflow with one command:
 
 ```bash
-gaps run puzzle.jpg solution.jpg --generations=20 --population=600 --size=48
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python scripts/run_demo.py
 ```
 
-__NOTE__: Size detection feature works for the most images but there are some edge cases
-where size detection fails and detects incorrect piece size. In that case you can
-explicitly set piece size.
+The demo uses `images/baboon.jpg` with piece size `64` and writes artifacts to
+`outputs/demo/`:
 
-## Termination condition
+- `puzzle.jpg`
+- `baseline.jpg`
+- `solution.jpg`
+- `history.csv`
+- `fitness.png`
+- `comparison.jpg`
+- `snapshots/`
 
-The termination condition of a Genetic Algorithm is important in determining
-when a GA run will end.  It has been observed that initially, the GA progresses
-very fast with better solutions coming in every few iterations, but this tends
-to saturate in the later stages where the improvements are very small.
+The GA may terminate early when progress stagnates, so the number of snapshot
+images can be smaller than the requested maximum number of generations.
 
-`gaps` will terminate:
+## Experiment Script
 
-* when there has been no improvement in the population for `X` iterations, or
-* when it reaches an absolute number of generations
+Run a small experiment grid:
 
-# References
+```bash
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python scripts/run_experiments.py
+```
 
-BibTeX entry:
+The experiment runner reuses one generated puzzle and compares a small set of
+GA configurations over generations and mutation rate. It writes results to:
+
+```text
+outputs/experiments/results.csv
+```
+
+This CSV is useful for comparing how configuration choices affect fitness,
+runtime, completed generations, termination reason, and solution-quality
+metrics.
+
+## Metrics Explained
+
+- `best_fitness`: best GA fitness value found in a run.
+- `average_fitness`: average population fitness per generation, saved in the
+  history CSV and plotted when requested.
+- `piece-position accuracy`: percentage of solved pieces that exactly match the
+  original image at the same position.
+- `adjacency accuracy`: percentage of neighboring piece relationships that are
+  correct in the solved arrangement.
+- `runtime`: wall-clock time reported by the CLI for the GA solve.
+- `generations completed`: number of generations actually executed.
+- `termination reason`: whether the GA stopped at max generations or due to
+  stagnation.
+
+## Project Structure
+
+```text
+gaps/       core solver, GA, fitness, crossover, selection, CLI
+scripts/    reproducible demo and experiment runners
+images/     sample images used for testing and demos
+outputs/    generated artifacts; ignored by git
+```
+
+## Testing
+
+Run the test suite with:
+
+```bash
+MPLCONFIGDIR=/tmp/matplotlib .venv/bin/python -m pytest
+```
+
+## Current Limitations
+
+- The project works on square-piece puzzles.
+- The piece size must evenly divide the image dimensions.
+- Exact pixel matching metrics assume puzzle pieces come from the provided
+  original image.
+- The GA may not fully solve harder or larger puzzles in low-generation demo
+  settings.
+- There is no web UI yet.
+
+## Future Work
+
+- Streamlit demo
+- richer experiment grid
+- GIF or video generation from snapshots
+- improved heuristic, crossover, and mutation variants
+- simple demo page
+
+## Reference
+
+This project is inspired by research on automatic jigsaw puzzle solving with
+genetic algorithms:
 
 ```text
 @article{Sholomon2016,
@@ -123,6 +205,7 @@ BibTeX entry:
 }
 ```
 
-# License
+## License
 
-This project as available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT)
+This project is available as open source under the terms of the
+[MIT License](LICENSE).
