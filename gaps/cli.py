@@ -1,5 +1,7 @@
+import csv
 import random
 import time
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -80,6 +82,18 @@ def _format_fitness(fitness: Optional[float]) -> str:
     return f"{fitness:.6f}"
 
 
+def _write_fitness_history(path: str, history) -> None:
+    output_path = Path(path)
+    if output_path.parent != Path("."):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = ["generation", "best_fitness", "average_fitness", "worst_fitness"]
+    with output_path.open("w", newline="") as history_file:
+        writer = csv.DictWriter(history_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(history)
+
+
 @click.command()
 @click.argument("puzzle", type=click.Path(exists=True, readable=True))
 @click.argument("solution", type=click.Path(dir_okay=False, writable=True))
@@ -129,6 +143,11 @@ def _format_fitness(fitness: Optional[float]) -> str:
     callback=_validate_mutation_rate,
     help="Probability of applying swap mutation to each child.",
 )
+@click.option(
+    "--history",
+    type=click.Path(dir_okay=False, writable=True),
+    help="Write GA fitness history to a CSV file.",
+)
 def run(
     puzzle: str,
     solution: str,
@@ -138,6 +157,7 @@ def run(
     debug: bool,
     seed: int,
     mutation_rate: float,
+    history: str,
 ) -> None:
     """Run puzzle solver.
 
@@ -184,6 +204,8 @@ def run(
     output_image = result.to_image()
 
     cv.imwrite(solution, output_image)
+    if history is not None:
+        _write_fitness_history(history, ga.fitness_history)
 
     click.echo("\nPuzzle solved")
     click.echo("Summary:")
@@ -199,6 +221,8 @@ def run(
     if seed is not None:
         click.echo(f"  Seed: {seed}")
     click.echo(f"  Output: {solution}")
+    if history is not None:
+        click.echo(f"  History: {history}")
 
 
 @click.command()
